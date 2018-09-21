@@ -748,11 +748,11 @@ func TestProgpow(t *testing.T) {
 	}
 	// Test the light ProgPoW
 	for i, tt := range tests {
-		cacheSize   := cacheSize(tt.blockNumber)
+		cacheSize := cacheSize(tt.blockNumber)
 		datasetSize := datasetSize(tt.blockNumber)
-		seedHash    := seedHash(tt.blockNumber)
-		cache       := make([]uint32, cacheSize/4)
-		epoch       := tt.blockNumber / epochLength
+		seedHash := seedHash(tt.blockNumber)
+		cache := make([]uint32, cacheSize/4)
+		epoch := tt.blockNumber / epochLength
 
 		generateCache(cache, epoch, seedHash)
 
@@ -767,12 +767,12 @@ func TestProgpow(t *testing.T) {
 	// Test the full ProgPoW
 	// Restricted to testing for one case due to large execution time
 	for i, tt := range tests[0:1] {
-		cacheSize   := cacheSize(tt.blockNumber)
+		cacheSize := cacheSize(tt.blockNumber)
 		datasetSize := datasetSize(tt.blockNumber)
-		seedHash    := seedHash(tt.blockNumber)
-		cache       := make([]uint32, cacheSize/4)
-		epoch       := tt.blockNumber / epochLength
-		dataset     := make([]uint32, datasetSize/4)
+		seedHash := seedHash(tt.blockNumber)
+		cache := make([]uint32, cacheSize/4)
+		epoch := tt.blockNumber / epochLength
+		dataset := make([]uint32, datasetSize/4)
 
 		generateCache(cache, epoch, seedHash)
 		generateDataset(dataset, epoch, cache)
