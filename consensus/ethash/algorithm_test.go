@@ -864,6 +864,19 @@ func BenchmarkHashimotoLight(b *testing.B) {
 	}
 }
 
+// Benchmarks the light verification performance.
+func BenchmarkProgpowLight(b *testing.B) {
+	cache := make([]uint32, cacheSize(1)/4)
+	generateCache(cache, 0, make([]byte, 32))
+
+	hash := hexutil.MustDecode("0xc9149cc0386e689d789a1c2f3d5d169a61a6218ed30e74414dc736e442ef3d1f")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		progpowLight(datasetSize(1), cache, hash, 0, 0)
+	}
+}
+
 // Benchmarks the full (small) verification performance.
 func BenchmarkHashimotoFullSmall(b *testing.B) {
 	cache := make([]uint32, 65536/4)
@@ -877,5 +890,21 @@ func BenchmarkHashimotoFullSmall(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		hashimotoFull(dataset, hash, 0)
+	}
+}
+
+// Benchmarks the full (small) verification performance.
+func BenchmarkProgpowFullSmall(b *testing.B) {
+	cache := make([]uint32, 65536/4)
+	generateCache(cache, 0, make([]byte, 32))
+
+	dataset := make([]uint32, 32*65536/4)
+	generateDataset(dataset, 0, cache)
+
+	hash := hexutil.MustDecode("0xc9149cc0386e689d789a1c2f3d5d169a61a6218ed30e74414dc736e442ef3d1f")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		progpowFull(dataset, hash, 0, 0)
 	}
 }
