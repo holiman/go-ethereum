@@ -16,23 +16,37 @@ const (
 )
 
 func progpowLight(size uint64, cache []uint32, hash []byte, nonce uint64,
-	blockNumber uint64) ([]byte, []byte) {
+	blockNumber uint64, cDag []uint32) ([]byte, []byte) {
 	keccak512 := makeHasher(sha3.NewKeccak512())
 
-	lookup := func(index uint32) uint32 {
+	lookup := func(index uint32) []byte {
 		rawData := generateDatasetItem(cache, index/16, keccak512)
-		data := binary.LittleEndian.Uint32(rawData[(index%16)*4:])
-		return data
+		return rawData
 	}
-	return progpow(hash, nonce, size, blockNumber, lookup)
+	return progpow(hash, nonce, size, blockNumber, cDag, lookup)
 }
 
 func progpowFull(dataset []uint32, hash []byte, nonce uint64,
 	blockNumber uint64) ([]byte, []byte) {
-	lookup := func(index uint32) uint32 {
-		return dataset[index]
+
+	lookup := func(index uint32) []byte {
+		mix := make([]byte, hashBytes)
+
+		for i := uint32(0); i < hashWords; i++ {
+			binary.LittleEndian.PutUint32(mix[i*4:], dataset[index + i])
+		}
+
+		return mix
 	}
-	return progpow(hash, nonce, uint64(len(dataset))*4, blockNumber, lookup)
+
+	cDag := make([]uint32, progpowCacheWords)
+
+	for i := uint32(0); i < progpowCacheWords; i += 2 {
+		cDag[i + 0] = dataset[2 * i + 0]
+		cDag[i + 1] = dataset[2 * i + 1]
+	}
+
+	return progpow(hash, nonce, uint64(len(dataset))*4, blockNumber, cDag, lookup)
 }
 
 func rotl32(x uint32, n uint32) uint32 {
@@ -290,25 +304,30 @@ func progpowMath(a uint32, b uint32, r uint32) uint32 {
 	default:
 		return 0
 	}
-	return 0
 }
 
 func progpowLoop(seed uint64, loop uint32,
 	mix *[progpowLanes][progpowRegs]uint32,
-	lookup func(index uint32) uint32,
+	lookup func(index uint32) []byte,
 	cDag []uint32, datasetSize uint32) {
 	// All lanes share a base address for the global load
 	// Global offset uses mix[0] to guarantee it depends on the load result
 	gOffset := mix[loop%progpowLanes][0] % datasetSize
 	gOffset = gOffset * progpowLanes
 	iMax := uint32(0)
+
+	dagData := lookup(2 * gOffset)
+
 	// Lanes can execute in parallel and will be convergent
 	for l := uint32(0); l < progpowLanes; l++ {
 		mixSeqCnt := uint32(0)
 
+		if (l != 0 && (2*(gOffset+l)) % 16 == 0) {
+			dagData = lookup(2*(gOffset+l))
+		}
+
 		// global load to sequential locations
-		data64 := uint64(lookup(2*(gOffset+l)+1))<<32 |
-			uint64(lookup(2*(gOffset+l)))
+		data64 := binary.LittleEndian.Uint64(dagData[((2*(gOffset+l))%16)*4:])
 
 		// initialize the seed and mix destination sequence
 		randState, mixSeq := progpowInit(seed)
@@ -356,19 +375,13 @@ func progpowLoop(seed uint64, loop uint32,
 	}
 }
 
-func progpow(hash []byte, nonce uint64, size uint64, blockNumber uint64,
-	lookup func(index uint32) uint32) ([]byte, []byte) {
+func progpow(hash []byte, nonce uint64, size uint64, blockNumber uint64, cDag []uint32,
+	lookup func(index uint32) []byte) ([]byte, []byte) {
 	var mix [progpowLanes][progpowRegs]uint32
 	var laneResults [progpowLanes]uint32
 
-	cDag := make([]uint32, progpowCacheWords)
 	result := make([]uint32, 8)
 
-	// initialize cDag
-	for i := uint32(0); i < progpowCacheWords; i += 2 {
-		cDag[i] = lookup(2 * i)
-		cDag[i+1] = lookup(2*i + 1)
-	}
 	for i := uint32(0); i < 8; i++ {
 		result[i] = 0
 	}

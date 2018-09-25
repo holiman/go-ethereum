@@ -32,6 +32,7 @@ import (
 	"sync/atomic"
 	"time"
 	"unsafe"
+	"encoding/binary"
 
 	mmap "github.com/edsrzf/mmap-go"
 	"github.com/ethereum/go-ethereum/common"
@@ -41,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/hashicorp/golang-lru/simplelru"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
 
 var ErrInvalidDumpMagic = errors.New("invalid dump magic")
@@ -739,7 +741,23 @@ func (ethash *Ethash) fullPow(number *big.Int) powFull {
 // lightPow returns either hashimoto or progpowdepending on number
 func (ethash *Ethash) lightPow(number *big.Int) powLight {
 	if progpowNumber := ethash.config.ProgpowBlockNumber; progpowNumber != nil && progpowNumber.Cmp(number) >= 0 {
-		return progpowLight
+		return func(size uint64, cache []uint32, hash []byte, nonce uint64, blockNumber uint64) ([]byte, []byte) {
+			// TODO: cDag should be generated once per epoch for a significant performance gain
+
+			keccak512 := makeHasher(sha3.NewKeccak512())
+			cDag := make([]uint32, progpowCacheWords)
+			rawData := generateDatasetItem(cache, 0, keccak512)
+
+			for i := uint32(0); i < progpowCacheWords; i += 2 {
+				if i != 0 && 2 * i / 16 != 2 * (i - 1) / 16 {
+					rawData = generateDatasetItem(cache,  2 * i / 16, keccak512)
+				}
+				cDag[i + 0] = binary.LittleEndian.Uint32(rawData[((2 * i + 0) % 16) * 4:])
+				cDag[i + 1] = binary.LittleEndian.Uint32(rawData[((2 * i + 1) % 16) * 4:])
+			}
+
+			return progpowLight(size, cache, hash, nonce, blockNumber, cDag)
+		}
 	}
 	return func(size uint64, cache []uint32, hash []byte, nonce uint64, blockNumber uint64) ([]byte, []byte) {
 		return hashimotoLight(size, cache, hash, nonce)

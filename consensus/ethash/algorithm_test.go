@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
 
 // prepare converts an ethash cache or dataset from a byte stream into the internal
@@ -746,6 +747,7 @@ func TestProgpow(t *testing.T) {
 			result:      hexutil.MustDecode("0x73347af72e0ad745a90ba61467607af9c152e963a3c24f24f1b411d521985355"),
 		},
 	}
+
 	// Test the light ProgPoW
 	for i, tt := range tests {
 		cacheSize := cacheSize(tt.blockNumber)
@@ -756,7 +758,19 @@ func TestProgpow(t *testing.T) {
 
 		generateCache(cache, epoch, seedHash)
 
-		digest, result := progpowLight(datasetSize, cache, tt.headerHash, tt.nonce, tt.blockNumber)
+		keccak512 := makeHasher(sha3.NewKeccak512())
+		cDag := make([]uint32, progpowCacheWords)
+		rawData := generateDatasetItem(cache, 0, keccak512)
+
+		for i := uint32(0); i < progpowCacheWords; i += 2 {
+			if i != 0 && 2 * i / 16 != 2 * (i - 1) / 16 {
+				rawData = generateDatasetItem(cache,  2 * i / 16, keccak512)
+			}
+			cDag[i + 0] = binary.LittleEndian.Uint32(rawData[((2 * i + 0) % 16) * 4:])
+			cDag[i + 1] = binary.LittleEndian.Uint32(rawData[((2 * i + 1) % 16) * 4:])
+		}
+
+		digest, result := progpowLight(datasetSize, cache, tt.headerHash, tt.nonce, tt.blockNumber, cDag)
 		if !bytes.Equal(digest, tt.digest) {
 			t.Errorf("%d Light ProgPoW digest mismatch: have %x, want %x", i, digest, tt.digest)
 		}
@@ -864,7 +878,9 @@ func BenchmarkHashimotoLight(b *testing.B) {
 	}
 }
 
-// Benchmarks the light verification performance.
+// Benchmarks the light verification performance (currently realistic version).
+// This benchmarks showcases the drop-in replacement without pregenerating
+// 	cDag as shown in BenchmarkProgpowOptimalLight.
 func BenchmarkProgpowLight(b *testing.B) {
 	cache := make([]uint32, cacheSize(1)/4)
 	generateCache(cache, 0, make([]byte, 32))
@@ -873,7 +889,44 @@ func BenchmarkProgpowLight(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		progpowLight(datasetSize(1), cache, hash, 0, 0)
+		keccak512 := makeHasher(sha3.NewKeccak512())
+		cDag := make([]uint32, progpowCacheWords)
+		rawData := generateDatasetItem(cache, 0, keccak512)
+
+		for i := uint32(0); i < progpowCacheWords; i += 2 {
+			if i != 0 && 2 * i / 16 != 2 * (i - 1) / 16 {
+				rawData = generateDatasetItem(cache,  2 * i / 16, keccak512)
+			}
+			cDag[i + 0] = binary.LittleEndian.Uint32(rawData[((2 * i + 0) % 16) * 4:])
+			cDag[i + 1] = binary.LittleEndian.Uint32(rawData[((2 * i + 1) % 16) * 4:])
+		}
+
+		progpowLight(datasetSize(1), cache, hash, 0, 0 , cDag)
+	}
+}
+
+// Benchmarks the light verification performance (optimal version).
+func BenchmarkProgpowOptimalLight(b *testing.B) {
+	cache := make([]uint32, cacheSize(1)/4)
+	generateCache(cache, 0, make([]byte, 32))
+
+	hash := hexutil.MustDecode("0xc9149cc0386e689d789a1c2f3d5d169a61a6218ed30e74414dc736e442ef3d1f")
+
+	keccak512 := makeHasher(sha3.NewKeccak512())
+	cDag := make([]uint32, progpowCacheWords)
+	rawData := generateDatasetItem(cache, 0, keccak512)
+
+	for i := uint32(0); i < progpowCacheWords; i += 2 {
+		if i != 0 && 2 * i / 16 != 2 * (i - 1) / 16 {
+			rawData = generateDatasetItem(cache,  2 * i / 16, keccak512)
+		}
+		cDag[i + 0] = binary.LittleEndian.Uint32(rawData[((2 * i + 0) % 16) * 4:])
+		cDag[i + 1] = binary.LittleEndian.Uint32(rawData[((2 * i + 1) % 16) * 4:])
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		progpowLight(datasetSize(1), cache, hash, 0, 0 , cDag)
 	}
 }
 
