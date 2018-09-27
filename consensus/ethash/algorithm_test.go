@@ -763,11 +763,11 @@ func TestProgpow(t *testing.T) {
 		rawData := generateDatasetItem(cache, 0, keccak512)
 
 		for i := uint32(0); i < progpowCacheWords; i += 2 {
-			if i != 0 && 2 * i / 16 != 2 * (i - 1) / 16 {
-				rawData = generateDatasetItem(cache,  2 * i / 16, keccak512)
+			if i != 0 && 2*i/16 != 2*(i-1)/16 {
+				rawData = generateDatasetItem(cache, 2*i/16, keccak512)
 			}
-			cDag[i + 0] = binary.LittleEndian.Uint32(rawData[((2 * i + 0) % 16) * 4:])
-			cDag[i + 1] = binary.LittleEndian.Uint32(rawData[((2 * i + 1) % 16) * 4:])
+			cDag[i+0] = binary.LittleEndian.Uint32(rawData[((2*i+0)%16)*4:])
+			cDag[i+1] = binary.LittleEndian.Uint32(rawData[((2*i+1)%16)*4:])
 		}
 
 		digest, result := progpowLight(datasetSize, cache, tt.headerHash, tt.nonce, tt.blockNumber, cDag)
@@ -894,14 +894,14 @@ func BenchmarkProgpowLight(b *testing.B) {
 		rawData := generateDatasetItem(cache, 0, keccak512)
 
 		for i := uint32(0); i < progpowCacheWords; i += 2 {
-			if i != 0 && 2 * i / 16 != 2 * (i - 1) / 16 {
-				rawData = generateDatasetItem(cache,  2 * i / 16, keccak512)
+			if i != 0 && 2*i/16 != 2*(i-1)/16 {
+				rawData = generateDatasetItem(cache, 2*i/16, keccak512)
 			}
-			cDag[i + 0] = binary.LittleEndian.Uint32(rawData[((2 * i + 0) % 16) * 4:])
-			cDag[i + 1] = binary.LittleEndian.Uint32(rawData[((2 * i + 1) % 16) * 4:])
+			cDag[i+0] = binary.LittleEndian.Uint32(rawData[((2*i+0)%16)*4:])
+			cDag[i+1] = binary.LittleEndian.Uint32(rawData[((2*i+1)%16)*4:])
 		}
 
-		progpowLight(datasetSize(1), cache, hash, 0, 0 , cDag)
+		progpowLight(datasetSize(1), cache, hash, 0, 0, cDag)
 	}
 }
 
@@ -917,16 +917,16 @@ func BenchmarkProgpowOptimalLight(b *testing.B) {
 	rawData := generateDatasetItem(cache, 0, keccak512)
 
 	for i := uint32(0); i < progpowCacheWords; i += 2 {
-		if i != 0 && 2 * i / 16 != 2 * (i - 1) / 16 {
-			rawData = generateDatasetItem(cache,  2 * i / 16, keccak512)
+		if i != 0 && 2*i/16 != 2*(i-1)/16 {
+			rawData = generateDatasetItem(cache, 2*i/16, keccak512)
 		}
-		cDag[i + 0] = binary.LittleEndian.Uint32(rawData[((2 * i + 0) % 16) * 4:])
-		cDag[i + 1] = binary.LittleEndian.Uint32(rawData[((2 * i + 1) % 16) * 4:])
+		cDag[i+0] = binary.LittleEndian.Uint32(rawData[((2*i+0)%16)*4:])
+		cDag[i+1] = binary.LittleEndian.Uint32(rawData[((2*i+1)%16)*4:])
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		progpowLight(datasetSize(1), cache, hash, 0, 0 , cDag)
+		progpowLight(datasetSize(1), cache, hash, 0, 0, cDag)
 	}
 }
 

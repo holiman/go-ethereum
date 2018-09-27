@@ -207,6 +207,27 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 	}
 }
 
+// generateCDag generates the cDag used for progpow. If the 'cDag' is nil, this method is a no-op. Otherwise
+// it expects the cDag to be of size progpowCacheWords
+func generateCDag(cDag, cache []uint32, epoch uint64) {
+	if cDag == nil {
+		return
+	}
+	start := time.Now()
+	keccak512 := makeHasher(sha3.NewKeccak512())
+	rawData := generateDatasetItem(cache, 0, keccak512)
+
+	for i := uint32(0); i < progpowCacheWords; i += 2 {
+		if i != 0 && 2*i/16 != 2*(i-1)/16 {
+			rawData = generateDatasetItem(cache, 2*i/16, keccak512)
+		}
+		cDag[i+0] = binary.LittleEndian.Uint32(rawData[((2*i+0)%16)*4:])
+		cDag[i+1] = binary.LittleEndian.Uint32(rawData[((2*i+1)%16)*4:])
+	}
+	elapsed := time.Since(start)
+	log.Info("Generated progpow cDag", "elapsed", common.PrettyDuration(elapsed), "epoch", epoch)
+}
+
 // swap changes the byte order of the buffer assuming a uint32 representation.
 func swap(buffer []byte) {
 	for i := 0; i < len(buffer); i += 4 {

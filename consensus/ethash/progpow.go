@@ -20,8 +20,7 @@ func progpowLight(size uint64, cache []uint32, hash []byte, nonce uint64,
 	keccak512 := makeHasher(sha3.NewKeccak512())
 
 	lookup := func(index uint32) []byte {
-		rawData := generateDatasetItem(cache, index/16, keccak512)
-		return rawData
+		return generateDatasetItem(cache, index/16, keccak512)
 	}
 	return progpow(hash, nonce, size, blockNumber, cDag, lookup)
 }
@@ -33,7 +32,7 @@ func progpowFull(dataset []uint32, hash []byte, nonce uint64,
 		mix := make([]byte, hashBytes)
 
 		for i := uint32(0); i < hashWords; i++ {
-			binary.LittleEndian.PutUint32(mix[i*4:], dataset[index + i])
+			binary.LittleEndian.PutUint32(mix[i*4:], dataset[index+i])
 		}
 
 		return mix
@@ -42,8 +41,8 @@ func progpowFull(dataset []uint32, hash []byte, nonce uint64,
 	cDag := make([]uint32, progpowCacheWords)
 
 	for i := uint32(0); i < progpowCacheWords; i += 2 {
-		cDag[i + 0] = dataset[2 * i + 0]
-		cDag[i + 1] = dataset[2 * i + 1]
+		cDag[i+0] = dataset[2*i+0]
+		cDag[i+1] = dataset[2*i+1]
 	}
 
 	return progpow(hash, nonce, uint64(len(dataset))*4, blockNumber, cDag, lookup)
@@ -322,12 +321,13 @@ func progpowLoop(seed uint64, loop uint32,
 	for l := uint32(0); l < progpowLanes; l++ {
 		mixSeqCnt := uint32(0)
 
-		if (l != 0 && (2*(gOffset+l)) % 16 == 0) {
-			dagData = lookup(2*(gOffset+l))
+		index := 2 * (gOffset + l)
+		if l != 0 && index%16 == 0 {
+			dagData = lookup(index)
 		}
 
 		// global load to sequential locations
-		data64 := binary.LittleEndian.Uint64(dagData[((2*(gOffset+l))%16)*4:])
+		data64 := binary.LittleEndian.Uint64(dagData[(index%16)*4:])
 
 		// initialize the seed and mix destination sequence
 		randState, mixSeq := progpowInit(seed)
@@ -382,10 +382,6 @@ func progpow(hash []byte, nonce uint64, size uint64, blockNumber uint64, cDag []
 
 	result := make([]uint32, 8)
 
-	for i := uint32(0); i < 8; i++ {
-		result[i] = 0
-	}
-
 	seed := keccakF800Short(hash, nonce, result)
 	for lane := uint32(0); lane < progpowLanes; lane++ {
 		mix[lane] = fillMix(seed, lane)
@@ -393,8 +389,7 @@ func progpow(hash []byte, nonce uint64, size uint64, blockNumber uint64, cDag []
 
 	blockNumberRounded := (blockNumber / epochLength) * epochLength
 	for l := uint32(0); l < progpowCntMem; l++ {
-		progpowLoop(blockNumberRounded, l, &mix, lookup, cDag,
-			uint32(size/progpowMixBytes))
+		progpowLoop(blockNumberRounded, l, &mix, lookup, cDag, uint32(size/progpowMixBytes))
 	}
 
 	// Reduce mix data to a single per-lane result
