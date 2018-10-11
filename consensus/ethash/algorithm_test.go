@@ -19,6 +19,7 @@ package ethash
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -868,7 +869,7 @@ TEST(progpow, l1_cache)
 func TestCDag(t *testing.T) {
 	size := cacheSize(0)
 	cache := make([]uint32, size/4)
-	seed := seedHash(1)
+	seed := seedHash(0)
 	generateCache(cache, 0, seed)
 	cDag := make([]uint32, progpowCacheWords)
 	generateCDag(cDag, cache, 0)
@@ -882,7 +883,62 @@ func TestCDag(t *testing.T) {
 			t.Errorf("cdag err, index %d, expected %d, got %d", i, expect[i], v)
 		}
 	}
+}
 
+func TestRandomMerge(t *testing.T) {
+
+	type test struct {
+		a   uint32
+		b   uint32
+		exp uint32
+	}
+	for i, tt := range []test{
+		{1000000, 101, 33000101},
+		{2000000, 102, 66003366},
+		{3000000, 103, 2999975},
+		{4000000, 104, 4000104},
+		{1000000, 0, 33000000},
+		{2000000, 0, 66000000},
+		{3000000, 0, 3000000},
+		{4000000, 0, 4000000},
+	} {
+		res := tt.a
+		merge(&res, tt.b, uint32(i))
+		if res != tt.exp {
+			t.Errorf("test %d, expected %d, got %d", i, tt.exp, res)
+		}
+		fmt.Printf("res %d", res)
+	}
+
+}
+
+func TestProgpowKeccak256(t *testing.T) {
+	result := make([]uint32, 8)
+	header := make([]byte, 32)
+	hash := keccakF800Long(header, 0, result)
+	exp := "5dd431e5fbc604f499bfa0232f45f8f142d0ff5178f539e5a7800bf0643697af"
+	if !bytes.Equal(hash, common.FromHex(exp)) {
+		t.Errorf("expected %s, got %x", exp, hash)
+	}
+}
+
+func TestProgpowHash(t *testing.T) {
+	size := cacheSize(0)
+	cache := make([]uint32, size/4)
+	seed := seedHash(0)
+	generateCache(cache, 0, seed)
+	cDag := make([]uint32, progpowCacheWords)
+	generateCDag(cDag, cache, 0)
+	datasetSize := calcDatasetSize(0)
+	fmt.Printf("datasetSize %d , cacheSize %d\n", datasetSize, size)
+	//result := make([]uint32, 8)
+	header := make([]byte, 32)
+	keccak512 := makeHasher(sha3.NewKeccak512())
+	lookup := func(index uint32) []byte {
+		return generateDatasetItem(cache, index/16, keccak512)
+	}
+	digest, result := progpow(header, 0, datasetSize, 0, cDag, lookup)
+	fmt.Printf("digest %x, result %x\n", digest, result)
 }
 
 // Benchmarks the cache generation performance.

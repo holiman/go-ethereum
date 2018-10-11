@@ -216,16 +216,14 @@ func generateCDag(cDag, cache []uint32, epoch uint64) {
 	start := time.Now()
 	keccak512 := makeHasher(sha3.NewKeccak512())
 
-	for i := uint32(0); i < progpowCacheWords; i += 16 {
-		rawData := generateDatasetItem(cache, i/16, keccak512)
-		index := ((2 * i) % 16) * 4
-		for j := uint32(0); j < 16; j += 4 {
-			cDag[i+j] = binary.LittleEndian.Uint32(rawData[index+j*4:])
-			cDag[i+j+1] = binary.LittleEndian.Uint32(rawData[index+4+j*4:])
-			cDag[i+j+2] = binary.LittleEndian.Uint32(rawData[index+8+j*4:])
-			cDag[i+j+3] = binary.LittleEndian.Uint32(rawData[index+12+j*4:])
+	for i := uint32(0); i < progpowCacheWords/16; i++ {
+		rawData := generateDatasetItem(cache, i, keccak512)
+		// 64 bytes in rawData -> 16 uint32
+		for j := uint32(0); j < 16; j++ {
+			cDag[i*16+j] = binary.LittleEndian.Uint32(rawData[4*j:])
 		}
 	}
+
 	elapsed := time.Since(start)
 	log.Info("Generated progpow cDag", "elapsed", common.PrettyDuration(elapsed), "epoch", epoch)
 }
