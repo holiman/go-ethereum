@@ -3,6 +3,7 @@ package ethash
 import (
 	"encoding/binary"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"math/bits"
 )
 
 const (
@@ -49,19 +50,19 @@ func progpowFull(dataset []uint32, hash []byte, nonce uint64,
 }
 
 func rotl32(x uint32, n uint32) uint32 {
-	return (((x) << (n % 32)) | ((x) >> (32 - (n % 32))))
+	return ((x) << (n % 32)) | ((x) >> (32 - (n % 32)))
 }
 
 func rotr32(x uint32, n uint32) uint32 {
-	return (((x) >> (n % 32)) | ((x) << (32 - (n % 32))))
+	return ((x) >> (n % 32)) | ((x) << (32 - (n % 32)))
 }
 
 func lower32(in uint64) uint32 {
-	return uint32(in & uint64(0x00000000FFFFFFFF))
+	return uint32(in)
 }
 
 func higher32(in uint64) uint32 {
-	return uint32((in >> 32) & uint64(0x00000000FFFFFFFF))
+	return uint32(in >> 32)
 }
 
 var keccakfRNDC = [24]uint32{
@@ -219,16 +220,6 @@ func clz(a uint32) uint32 {
 	return uint32(32)
 }
 
-func popcount(a uint32) uint32 {
-	count := uint32(0)
-	for i := uint32(0); i < 32; i++ {
-		if ((a >> (31 - i)) & uint32(1)) == uint32(1) {
-			count += 1
-		}
-	}
-	return count
-}
-
 // Merge new data from b into the value in a
 // Assuming A has high entropy only do ops that retain entropy
 // even if B is low entropy
@@ -297,9 +288,10 @@ func progpowMath(a uint32, b uint32, r uint32) uint32 {
 	case 8:
 		return a ^ b
 	case 9:
-		return clz(a) + clz(b)
+		return uint32(bits.LeadingZeros32(a) + bits.LeadingZeros32(b))
 	case 10:
-		return popcount(a) + popcount(b)
+		return uint32(bits.OnesCount32(a) + bits.OnesCount32(b))
+
 	default:
 		return 0
 	}

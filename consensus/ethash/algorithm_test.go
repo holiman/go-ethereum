@@ -912,6 +912,45 @@ func TestRandomMerge(t *testing.T) {
 
 }
 
+func TestRandomMath(t *testing.T) {
+
+	type test struct {
+		a   uint32
+		b   uint32
+		exp uint32
+	}
+	for i, tt := range []test{
+		{20, 22, 42},
+		{70000, 80000, 1305032704},
+		{70000, 80000, 1},
+		{1, 2, 1},
+		{3, 10000, 196608},
+		{3, 0, 3},
+		{3, 6, 2},
+		{3, 6, 7},
+		{3, 6, 5},
+		{0, 0xffffffff, 32},
+		{3 << 13, 1 << 5, 3},
+		{22, 20, 42},
+		{80000, 70000, 1305032704},
+		{80000, 70000, 1},
+		{2, 1, 1},
+		{10000, 3, 80000},
+		{0, 3, 0},
+		{6, 3, 2},
+		{6, 3, 7},
+		{6, 3, 5},
+		{0, 0xffffffff, 32},
+		{3 << 13, 1 << 5, 3},
+	} {
+		res := progpowMath(tt.a, tt.b, uint32(i))
+		if res != tt.exp {
+			t.Errorf("test %d, expected %d, got %d", i, tt.exp, res)
+		}
+	}
+
+}
+
 func TestProgpowKeccak256(t *testing.T) {
 	result := make([]uint32, 8)
 	header := make([]byte, 32)
@@ -938,7 +977,7 @@ func TestProgpowHash(t *testing.T) {
 		return generateDatasetItem(cache, index/16, keccak512)
 	}
 	digest, result := progpow(header, 0, datasetSize, 0, cDag, lookup)
-	fmt.Printf("digest %x, result %x\n", digest, result)
+	fmt.Printf("digest %x, result %x, want e97815fd71c97e3d86641f1a4762b066341a610925d110b0e55b2d48ccf596bb\n", digest, result)
 }
 
 // Benchmarks the cache generation performance.
