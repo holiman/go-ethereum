@@ -977,7 +977,14 @@ func TestProgpowHash(t *testing.T) {
 		return generateDatasetItem(cache, index/16, keccak512)
 	}
 	digest, result := progpow(header, 0, datasetSize, 0, cDag, lookup)
-	fmt.Printf("digest %x, result %x, want e97815fd71c97e3d86641f1a4762b066341a610925d110b0e55b2d48ccf596bb\n", digest, result)
+	expdig := common.FromHex("7d5b1d047bfb2ebeff3f60d6cc935fc1eb882ece1732eb4708425d2f11965535")
+	expres := common.FromHex("8c091b4eebc51620ca41e2b90a167d378dbfe01c0a255f70ee7004d85a646e17")
+	if !bytes.Equal(digest, expdig) {
+		t.Errorf("digest err, got %x expected %x", digest, expdig)
+	}
+	if !bytes.Equal(result, expres) {
+		t.Errorf("result err, got %x expected %x", result, expres)
+	}
 }
 
 // Benchmarks the cache generation performance.
@@ -1046,18 +1053,8 @@ func BenchmarkProgpowOptimalLight(b *testing.B) {
 	generateCache(cache, 0, make([]byte, 32))
 
 	hash := hexutil.MustDecode("0xc9149cc0386e689d789a1c2f3d5d169a61a6218ed30e74414dc736e442ef3d1f")
-
-	keccak512 := makeHasher(sha3.NewKeccak512())
 	cDag := make([]uint32, progpowCacheWords)
-	rawData := generateDatasetItem(cache, 0, keccak512)
-
-	for i := uint32(0); i < progpowCacheWords; i += 2 {
-		if i != 0 && 2*i/16 != 2*(i-1)/16 {
-			rawData = generateDatasetItem(cache, 2*i/16, keccak512)
-		}
-		cDag[i+0] = binary.LittleEndian.Uint32(rawData[((2*i+0)%16)*4:])
-		cDag[i+1] = binary.LittleEndian.Uint32(rawData[((2*i+1)%16)*4:])
-	}
+	generateCDag(cDag, cache, 0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

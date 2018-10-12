@@ -71,7 +71,7 @@ var keccakfRNDC = [24]uint32{
 	0x8000808b, 0x0000008b, 0x00008089, 0x00008003, 0x00008002, 0x00000080,
 	0x0000800a, 0x8000000a, 0x80008081, 0x00008080, 0x80000001, 0x80008008}
 
-func keccakF800Round(st [25]uint32, r int) [25]uint32 {
+func keccakF800Round(st *[25]uint32, r int) {
 	var keccakfROTC = [24]uint32{1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2,
 		14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61,
 		20, 44}
@@ -93,8 +93,7 @@ func keccakF800Round(st [25]uint32, r int) [25]uint32 {
 
 	// Rho Pi
 	t := st[1]
-	for i := 0; i < 24; i++ {
-		j := keccakfPILN[i]
+	for i, j := range keccakfPILN {
 		bc[0] = st[j]
 		st[j] = rotl32(t, keccakfROTC[i])
 		t = bc[0]
@@ -102,25 +101,32 @@ func keccakF800Round(st [25]uint32, r int) [25]uint32 {
 
 	//  Chi
 	for j := 0; j < 25; j += 5 {
-		for i := 0; i < 5; i++ {
-			bc[i] = st[j+i]
-		}
-		for i := 0; i < 5; i++ {
-			st[j+i] ^= (^bc[(i+1)%5]) & bc[(i+2)%5]
-		}
+		/*
+			for i := 0; i < 5; i++ {
+				bc[i] = st[j+i]
+			}
+			for i := 0; i < 5; i++ {
+				st[j+i] ^= (^bc[(i+1)%5]) & bc[(i+2)%5]
+			}*/
+		bc[0] = st[j+0]
+		bc[1] = st[j+1]
+		bc[2] = st[j+2]
+		bc[3] = st[j+3]
+		bc[4] = st[j+4]
+		st[j+0] ^= ^bc[1] & bc[2]
+		st[j+1] ^= ^bc[2] & bc[3]
+		st[j+2] ^= ^bc[3] & bc[4]
+		st[j+3] ^= ^bc[4] & bc[0]
+		st[j+4] ^= ^bc[0] & bc[1]
 	}
 
 	//  Iota
 	st[0] ^= keccakfRNDC[r]
-	return st
+	//return st
 }
 
 func keccakF800Short(headerHash []byte, nonce uint64, result []uint32) uint64 {
 	var st [25]uint32
-
-	for i := 0; i < 25; i++ {
-		st[i] = 0
-	}
 
 	for i := 0; i < 8; i++ {
 		st[i] = (uint32(headerHash[4*i])) +
@@ -134,19 +140,17 @@ func keccakF800Short(headerHash []byte, nonce uint64, result []uint32) uint64 {
 	for i := 0; i < 8; i++ {
 		st[10+i] = result[i]
 	}
+
 	for r := 0; r < 21; r++ {
-		st = keccakF800Round(st, r)
+		keccakF800Round(&st, r)
 	}
-	st = keccakF800Round(st, 21)
+	keccakF800Round(&st, 21)
 	return (uint64(st[0]) << 32) | uint64(st[1])
 }
 
 func keccakF800Long(headerHash []byte, nonce uint64, result []uint32) []byte {
 	var st [25]uint32
 
-	for i := 0; i < 25; i++ {
-		st[i] = 0
-	}
 	for i := 0; i < 8; i++ {
 		st[i] = (uint32(headerHash[4*i])) +
 			(uint32(headerHash[4*i+1]) << 8) +
@@ -159,10 +163,11 @@ func keccakF800Long(headerHash []byte, nonce uint64, result []uint32) []byte {
 	for i := 0; i < 8; i++ {
 		st[10+i] = result[i]
 	}
+
 	for r := 0; r < 21; r++ {
-		st = keccakF800Round(st, r)
+		keccakF800Round(&st, r)
 	}
-	st = keccakF800Round(st, 21)
+	keccakF800Round(&st, 21)
 	ret := make([]byte, 32)
 	for i := 0; i < 8; i++ {
 		binary.LittleEndian.PutUint32(ret[i*4:], st[i])
@@ -211,15 +216,6 @@ func fillMix(seed uint64, laneId uint32) [progpowRegs]uint32 {
 	return mix
 }
 
-func clz(a uint32) uint32 {
-	for i := uint32(0); i < 32; i++ {
-		if (a >> (31 - i)) > 0 {
-			return i
-		}
-	}
-	return uint32(32)
-}
-
 // Merge new data from b into the value in a
 // Assuming A has high entropy only do ops that retain entropy
 // even if B is low entropy
@@ -232,7 +228,7 @@ func merge(a *uint32, b uint32, r uint32) {
 		*a = (*a ^ b) * 33
 	case 2:
 		*a = rotl32(*a, ((r>>16)%32)) ^ b
-	case 3:
+	default:
 		*a = rotr32(*a, ((r>>16)%32)) ^ b
 	}
 }
@@ -297,15 +293,14 @@ func progpowMath(a uint32, b uint32, r uint32) uint32 {
 	}
 }
 
-func progpowLoop(seed uint64, loop uint32,
-	mix *[progpowLanes][progpowRegs]uint32,
+func progpowLoop(seed uint64, loop uint32, mix *[progpowLanes][progpowRegs]uint32,
 	lookup func(index uint32) []byte,
 	cDag []uint32, datasetSize uint32) {
 	// All lanes share a base address for the global load
 	// Global offset uses mix[0] to guarantee it depends on the load result
 	gOffset := mix[loop%progpowLanes][0] % datasetSize
 	gOffset = gOffset * progpowLanes
-	iMax := uint32(0)
+	//iMax := uint32(0)
 
 	dagData := lookup(2 * gOffset)
 
@@ -324,14 +319,15 @@ func progpowLoop(seed uint64, loop uint32,
 		// initialize the seed and mix destination sequence
 		randState, mixSeq := progpowInit(seed)
 
-		if progpowCntCache > progpowCntMath {
-			iMax = progpowCntCache
-		} else {
-			iMax = progpowCntMath
-		}
+		//if progpowCntCache > progpowCntMath {
+		//	iMax = progpowCntCache
+		//} else {
+		//	iMax = progpowCntMath
+		//}
 
-		for i := uint32(0); i < iMax; i++ {
-			if i < progpowCntCache {
+		for i := uint32(0); i < 8; i++ {
+			//if i < progpowCntCache
+			{
 				// Cached memory access
 				// lanes access random location
 				src1 := kiss99(&randState) % progpowRegs
@@ -343,7 +339,8 @@ func progpowLoop(seed uint64, loop uint32,
 				merge(&mix[l][dest], data32, r)
 			}
 
-			if i < progpowCntMath {
+			//if i < progpowCntMath
+			{
 				// Random Math
 				src11 := kiss99(&randState)
 				src1 := src11 % progpowRegs
