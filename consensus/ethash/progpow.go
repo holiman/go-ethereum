@@ -7,13 +7,14 @@ import (
 )
 
 const (
-	progpowCacheWords = 4 * 1024 // Total size 16*1024 bytes
-	progpowLanes      = 32
-	progpowRegs       = 16
-	progpowCntCache   = 8
-	progpowCntMath    = 8
-	progpowCntMem     = loopAccesses
-	progpowMixBytes   = 2 * mixBytes
+	progpowCacheWords   = 4 * 1024 // Total size 16*1024 bytes
+	progpowLanes        = 32
+	progpowRegs         = 16
+	progpowCntCache     = 8
+	progpowCntMath      = 8
+	progpowPeriodLength = 50 // Blocks per progpow epoch (N)
+	progpowCntMem       = loopAccesses
+	progpowMixBytes     = 2 * mixBytes
 )
 
 func progpowLight(size uint64, cache []uint32, hash []byte, nonce uint64,
@@ -101,13 +102,6 @@ func keccakF800Round(st *[25]uint32, r int) {
 
 	//  Chi
 	for j := 0; j < 25; j += 5 {
-		/*
-			for i := 0; i < 5; i++ {
-				bc[i] = st[j+i]
-			}
-			for i := 0; i < 5; i++ {
-				st[j+i] ^= (^bc[(i+1)%5]) & bc[(i+2)%5]
-			}*/
 		bc[0] = st[j+0]
 		bc[1] = st[j+1]
 		bc[2] = st[j+2]
@@ -376,9 +370,9 @@ func progpow(hash []byte, nonce uint64, size uint64, blockNumber uint64, cDag []
 		mix[lane] = fillMix(seed, lane)
 	}
 
-	blockNumberRounded := (blockNumber / epochLength) * epochLength
+	period := (blockNumber / progpowPeriodLength)
 	for l := uint32(0); l < progpowCntMem; l++ {
-		progpowLoop(blockNumberRounded, l, &mix, lookup, cDag, uint32(size/progpowMixBytes))
+		progpowLoop(period, l, &mix, lookup, cDag, uint32(size/progpowMixBytes))
 	}
 
 	// Reduce mix data to a single per-lane result
