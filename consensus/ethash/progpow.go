@@ -139,7 +139,10 @@ func keccakF800Short(headerHash []byte, nonce uint64, result []uint32) uint64 {
 		keccakF800Round(&st, r)
 	}
 	keccakF800Round(&st, 21)
-	return (uint64(st[0]) << 32) | uint64(st[1])
+	ret := make([]byte, 8)
+	binary.BigEndian.PutUint32(ret[4:], st[0])
+	binary.BigEndian.PutUint32(ret, st[1])
+	return binary.LittleEndian.Uint64(ret)
 }
 
 func keccakF800Long(headerHash []byte, nonce uint64, result []uint32) []byte {
@@ -158,10 +161,9 @@ func keccakF800Long(headerHash []byte, nonce uint64, result []uint32) []byte {
 		st[10+i] = result[i]
 	}
 
-	for r := 0; r < 21; r++ {
+	for r := 0; r <= 21; r++ {
 		keccakF800Round(&st, r)
 	}
-	keccakF800Round(&st, 21)
 	ret := make([]byte, 32)
 	for i := 0; i < 8; i++ {
 		binary.LittleEndian.PutUint32(ret[i*4:], st[i])

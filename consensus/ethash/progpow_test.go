@@ -104,23 +104,18 @@ func TestProgpowKeccak256(t *testing.T) {
 		t.Errorf("expected %s, got %x", exp, hash)
 	}
 }
-func hashForBlock(blocknum uint64, nonce uint64, headerHash common.Hash) ([]byte, []byte, error) {
-	size := cacheSize(blocknum)
-	cache := make([]uint32, size/4)
-	seed := seedHash(blocknum)
-	epoch := blocknum / epochLength
-	generateCache(cache, epoch, seed)
-	cDag := make([]uint32, progpowCacheWords)
-	generateCDag(cDag, cache, epoch)
-	datasetSize := datasetSize(blocknum)
-
-	keccak512 := makeHasher(sha3.NewKeccak512())
-	lookup := func(index uint32) []byte {
-		return generateDatasetItem(cache, index/16, keccak512)
+func TestProgpowKeccak64(t *testing.T) {
+	result := make([]uint32, 8)
+	header := make([]byte, 32)
+	hash := keccakF800Short(header, 0, result)
+	exp := uint64(0x5dd431e5fbc604f4)
+	if exp != hash {
+		t.Errorf("expected %x, got %x", exp, hash)
 	}
-	digest, result := progpow(headerHash.Bytes(), nonce, datasetSize, blocknum, cDag, lookup)
+}
 
-	return digest, result, nil
+func hashForBlock(blocknum uint64, nonce uint64, headerHash common.Hash) ([]byte, []byte, error) {
+	return speedyHashForBlock(&periodContext{}, blocknum, nonce, headerHash)
 }
 
 type periodContext struct {
@@ -157,8 +152,8 @@ func speedyHashForBlock(ctx *periodContext, blocknum uint64, nonce uint64, heade
 
 func TestProgpowHash(t *testing.T) {
 	digest, result, _ := hashForBlock(0, 0, common.Hash{})
-	expdig := common.FromHex("7d5b1d047bfb2ebeff3f60d6cc935fc1eb882ece1732eb4708425d2f11965535")
-	expres := common.FromHex("8c091b4eebc51620ca41e2b90a167d378dbfe01c0a255f70ee7004d85a646e17")
+	expdig := common.FromHex("5391770a00140cfab1202df86ab47fb86bb299fe4386e6d593d4416b9414df92")
+	expres := common.FromHex("d46c7c0a927acead9f943bee6ed95bba40dfbe6c24b232af3e7764f6c8849d41")
 	if !bytes.Equal(digest, expdig) {
 		t.Errorf("digest err, got %x expected %x", digest, expdig)
 	}
@@ -215,12 +210,11 @@ func TestProgpowHashes(t *testing.T) {
 		expectDigest := common.FromHex(tt.finalHash)
 		expectHash := common.FromHex(tt.mixHash)
 		if !bytes.Equal(digest, expectDigest) {
-			t.Fatalf("test %d (blocknum %d), digest err, got %x expected %x", i, tt.blockNum, digest, expectDigest)
+			t.Errorf("test %d (blocknum %d), digest err, got %x expected %x", i, tt.blockNum, digest, expectDigest)
 		}
 		if !bytes.Equal(result, expectHash) {
 			t.Fatalf("test %d (blocknum %d), result err, got %x expected %x", i, tt.blockNum, result, expectHash)
 		}
-		fmt.Printf("test %d ok!\n", i)
-		//break
+		//fmt.Printf("test %d ok!\n", i)
 	}
 }
