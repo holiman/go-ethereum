@@ -18,7 +18,6 @@
 package ethash
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -38,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -750,26 +748,14 @@ func (ethash *Ethash) lightPow(number *big.Int) powLight {
 	if progpowNumber := ethash.config.ProgpowBlockNumber; progpowNumber != nil && progpowNumber.Cmp(number) <= 0 {
 		return func(size uint64, cache []uint32, hash []byte, nonce uint64, blockNumber uint64) ([]byte, []byte) {
 			ethashCache := ethash.cache(blockNumber)
-			var cDag []uint32
-			if ethashCache == nil || ethashCache.cDag == nil {
-				// cDag should be generated once per epoch for a significant performance gain
+			if ethashCache.cDag == nil {
 				log.Warn("cDag is nil, suboptimal performance")
-				keccak512 := makeHasher(sha3.NewKeccak512())
+				var cDag []uint32
 				cDag = make([]uint32, progpowCacheWords)
-				rawData := generateDatasetItem(cache, 0, keccak512)
-
-				for i := uint32(0); i < progpowCacheWords; i += 2 {
-					if i != 0 && 2*i/16 != 2*(i-1)/16 {
-						rawData = generateDatasetItem(cache, 2*i/16, keccak512)
-					}
-					cDag[i+0] = binary.LittleEndian.Uint32(rawData[((2*i+0)%16)*4:])
-					cDag[i+1] = binary.LittleEndian.Uint32(rawData[((2*i+1)%16)*4:])
-				}
-			} else {
-				cDag = ethashCache.cDag
+				generateCDag(cDag, ethashCache.cache, blockNumber/epochLength)
+				ethashCache.cDag = cDag
 			}
-
-			return progpowLight(size, cache, hash, nonce, blockNumber, cDag)
+			return progpowLight(size, cache, hash, nonce, blockNumber, ethashCache.cDag)
 		}
 	}
 	return func(size uint64, cache []uint32, hash []byte, nonce uint64, blockNumber uint64) ([]byte, []byte) {

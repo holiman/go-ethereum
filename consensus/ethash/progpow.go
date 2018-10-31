@@ -17,8 +17,7 @@ const (
 	progpowMixBytes     = 2 * mixBytes
 )
 
-func progpowLight(size uint64, cache []uint32, hash []byte, nonce uint64,
-	blockNumber uint64, cDag []uint32) ([]byte, []byte) {
+func progpowLight(size uint64, cache []uint32, hash []byte, nonce uint64, blockNumber uint64, cDag []uint32) ([]byte, []byte) {
 	keccak512 := makeHasher(sha3.NewKeccak512())
 
 	lookup := func(index uint32) []byte {
@@ -27,8 +26,7 @@ func progpowLight(size uint64, cache []uint32, hash []byte, nonce uint64,
 	return progpow(hash, nonce, size, blockNumber, cDag, lookup)
 }
 
-func progpowFull(dataset []uint32, hash []byte, nonce uint64,
-	blockNumber uint64) ([]byte, []byte) {
+func progpowFull(dataset []uint32, hash []byte, nonce uint64, blockNumber uint64) ([]byte, []byte) {
 
 	lookup := func(index uint32) []byte {
 		mix := make([]byte, hashBytes)
@@ -43,8 +41,8 @@ func progpowFull(dataset []uint32, hash []byte, nonce uint64,
 	cDag := make([]uint32, progpowCacheWords)
 
 	for i := uint32(0); i < progpowCacheWords; i += 2 {
-		cDag[i+0] = dataset[2*i+0]
-		cDag[i+1] = dataset[2*i+1]
+		cDag[i+0] = dataset[i+0]
+		cDag[i+1] = dataset[i+1]
 	}
 
 	return progpow(hash, nonce, uint64(len(dataset))*4, blockNumber, cDag, lookup)
