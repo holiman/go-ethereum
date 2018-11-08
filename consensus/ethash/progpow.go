@@ -360,16 +360,15 @@ func progpowLoop(seed uint64, loop uint32, mix *[progpowLanes][progpowRegs]uint3
 
 func progpow(hash []byte, nonce uint64, size uint64, blockNumber uint64, cDag []uint32,
 	lookup func(index uint32) []byte) ([]byte, []byte) {
-	var mix [progpowLanes][progpowRegs]uint32
-	var laneResults [progpowLanes]uint32
-
+	var (
+		mix         [progpowLanes][progpowRegs]uint32
+		laneResults [progpowLanes]uint32
+	)
 	result := make([]uint32, 8)
-
 	seed := keccakF800Short(hash, nonce, result)
 	for lane := uint32(0); lane < progpowLanes; lane++ {
 		mix[lane] = fillMix(seed, lane)
 	}
-
 	period := (blockNumber / progpowPeriodLength)
 	for l := uint32(0); l < progpowCntMem; l++ {
 		progpowLoop(period, l, &mix, lookup, cDag, uint32(size/progpowMixBytes))
@@ -382,20 +381,16 @@ func progpow(hash []byte, nonce uint64, size uint64, blockNumber uint64, cDag []
 			fnv1a(&laneResults[lane], mix[lane][i])
 		}
 	}
-
 	for i := uint32(0); i < 8; i++ {
 		result[i] = 0x811c9dc5
 	}
 	for lane := uint32(0); lane < progpowLanes; lane++ {
 		fnv1a(&result[lane%8], laneResults[lane])
 	}
-
-	digest := keccakF800Long(hash, seed, result[:])
-
-	resultBytes := make([]byte, 8*4)
+	finalHash := keccakF800Long(hash, seed, result[:])
+	mixHash := make([]byte, 8*4)
 	for i := 0; i < 8; i++ {
-		binary.LittleEndian.PutUint32(resultBytes[i*4:], result[i])
+		binary.LittleEndian.PutUint32(mixHash[i*4:], result[i])
 	}
-
-	return digest[:], resultBytes[:]
+	return mixHash[:], finalHash[:]
 }

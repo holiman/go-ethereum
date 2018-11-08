@@ -145,20 +145,20 @@ func speedyHashForBlock(ctx *periodContext, blocknum uint64, nonce uint64, heade
 	lookup := func(index uint32) []byte {
 		return generateDatasetItem(ctx.cache, index/16, keccak512)
 	}
-	digest, result := progpow(headerHash.Bytes(), nonce, ctx.datasetSize, blocknum, ctx.cDag, lookup)
+	mixhash, final := progpow(headerHash.Bytes(), nonce, ctx.datasetSize, blocknum, ctx.cDag, lookup)
 
-	return digest, result, nil
+	return mixhash, final, nil
 }
 
 func TestProgpowHash(t *testing.T) {
-	digest, result, _ := hashForBlock(0, 0, common.Hash{})
-	expdig := common.FromHex("5391770a00140cfab1202df86ab47fb86bb299fe4386e6d593d4416b9414df92")
-	expres := common.FromHex("d46c7c0a927acead9f943bee6ed95bba40dfbe6c24b232af3e7764f6c8849d41")
-	if !bytes.Equal(digest, expdig) {
-		t.Errorf("digest err, got %x expected %x", digest, expdig)
+	mixHash, finalHash, _ := hashForBlock(0, 0, common.Hash{})
+	expHash := common.FromHex("5391770a00140cfab1202df86ab47fb86bb299fe4386e6d593d4416b9414df92")
+	expMix := common.FromHex("d46c7c0a927acead9f943bee6ed95bba40dfbe6c24b232af3e7764f6c8849d41")
+	if !bytes.Equal(mixHash, expMix) {
+		t.Errorf("mixhash err, got %x expected %x", mixHash, expMix)
 	}
-	if !bytes.Equal(result, expres) {
-		t.Errorf("result err, got %x expected %x", result, expres)
+	if !bytes.Equal(finalHash, expHash) {
+		t.Errorf("sealhash err, got %x expected %x", finalHash, expHash)
 	}
 }
 
@@ -200,20 +200,20 @@ func TestProgpowHashes(t *testing.T) {
 		if err != nil {
 			t.Errorf("test %d, nonce err: %v", i, err)
 		}
-		digest, result, err := speedyHashForBlock(&ctx,
+		mixhash, final, err := speedyHashForBlock(&ctx,
 			uint64(tt.blockNum),
 			uint64(nonce),
 			common.BytesToHash(common.FromHex(tt.headerHash)))
 		if err != nil {
 			t.Errorf("test %d, err: %v", i, err)
 		}
-		expectDigest := common.FromHex(tt.finalHash)
-		expectHash := common.FromHex(tt.mixHash)
-		if !bytes.Equal(digest, expectDigest) {
-			t.Errorf("test %d (blocknum %d), digest err, got %x expected %x", i, tt.blockNum, digest, expectDigest)
+		expectFinalHash := common.FromHex(tt.finalHash)
+		expectMixHash := common.FromHex(tt.mixHash)
+		if !bytes.Equal(final, expectFinalHash) {
+			t.Errorf("test %d (blocknum %d), sealhash err, got %x expected %x", i, tt.blockNum, final, expectFinalHash)
 		}
-		if !bytes.Equal(result, expectHash) {
-			t.Fatalf("test %d (blocknum %d), result err, got %x expected %x", i, tt.blockNum, result, expectHash)
+		if !bytes.Equal(mixhash, expectMixHash) {
+			t.Fatalf("test %d (blocknum %d), mixhash err, got %x expected %x", i, tt.blockNum, mixhash, expectMixHash)
 		}
 		//fmt.Printf("test %d ok!\n", i)
 	}
