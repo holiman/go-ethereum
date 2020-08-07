@@ -17,6 +17,7 @@
 package snapshot
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type leaf struct {
@@ -32,6 +34,48 @@ type leaf struct {
 }
 
 type trieGeneratorFn func(in chan (leaf), out chan (common.Hash))
+
+func GenerateBinaryTree(path string, it AccountIterator) common.Hash {
+	db, err := leveldb.OpenFile(path+"/bintrie", nil)
+	if err != nil {
+		panic(fmt.Sprintf("error opening bintrie db, err=%v", err))
+	}
+	defer db.Close()
+	btrie := new(trie.BinaryTrie)
+	btrie.CommitCh = make(chan trie.BinaryHashPreimage)
+
+	var nodeCount uint64
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for kv := range btrie.CommitCh {
+			nodeCount++
+			log.Debug("inserting key", "count", nodeCount, "key", common.ToHex(kv.Key), "value", common.ToHex(kv.Value))
+			db.Put(kv.Key, kv.Value, nil)
+		}
+	}()
+	counter := 0
+	for it.Next() {
+		counter++
+		// Don't get the entire expanded account at this
+		// stage - NOTE
+		btrie.TryUpdate(it.Hash().Bytes(), it.Account())
+	}
+	log.Info("Inserted all leaves", "count", counter)
+
+	err = btrie.Commit()
+	if err != nil {
+		panic(fmt.Sprintf("error committing trie, err=%v", err))
+	}
+	close(btrie.CommitCh)
+	wg.Wait()
+	btrie.CommitCh = nil
+	log.Info("Done writing nodes to the DB", "count", nodeCount)
+	log.Info("Calculated binary hash", "hash", common.ToHex(btrie.Hash()))
+
+	return common.BytesToHash(btrie.Hash())
+}
 
 // GenerateTrieRoot takes an account iterator and reproduces the root hash.
 func GenerateTrieRoot(it AccountIterator) common.Hash {

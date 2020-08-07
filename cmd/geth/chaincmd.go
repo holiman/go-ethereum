@@ -19,7 +19,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -33,11 +32,13 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/syndtr/goleveldb/leveldb"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -206,6 +207,22 @@ Use "ethereum dump 0" to dump the genesis block.`,
 		Action:    utils.MigrateFlags(snapToHash),
 		Name:      "snaphash",
 		Usage:     "Calculate the trie root hash from the snapshot db",
+		ArgsUsage: " ",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.AncientFlag,
+			utils.CacheFlag,
+			utils.TestnetFlag,
+			utils.RinkebyFlag,
+			utils.GoerliFlag,
+			utils.SyncModeFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
+	}
+	generateBinaryTrieCommand = cli.Command{
+		Action:    utils.MigrateFlags(snapToBin),
+		Name:      "bintrie",
+		Usage:     "Convert the snapshot DB to a binary trie",
 		ArgsUsage: " ",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
@@ -624,6 +641,48 @@ func snapToHash(ctx *cli.Context) error {
 		return fmt.Errorf("Wrong hash generated, expected %x, got %x", root, generatedRoot[:])
 	}
 	log.Info("Generation done", "root", generatedRoot)
+	return nil
+}
+
+func snapToBin(ctx *cli.Context) error {
+	node, _ := makeConfigNode(ctx)
+	chain, chainDb := utils.MakeChain(ctx, node)
+
+	defer func() {
+		node.Close()
+		chain.Stop()
+		chainDb.Close()
+	}()
+
+	snapTree := chain.Snapshot()
+	if snapTree == nil {
+		return fmt.Errorf("No snapshot tree available")
+	}
+	block := chain.CurrentBlock()
+	if block == nil {
+		return fmt.Errorf("no blocks present")
+	}
+	root := block.Root()
+	it, err := snapTree.AccountIterator(root, common.Hash{})
+	if err != nil {
+		return fmt.Errorf("Could not create iterator for root %x: %v", root, err)
+	}
+	log.Info("Generating binary trie", "root", root)
+	generatedRoot := snapshot.GenerateBinaryTree(ctx.GlobalString(utils.DataDirFlag.Name), it)
+	log.Info("Generation done", "root", root, "binary root", generatedRoot)
+
+	db, err := leveldb.OpenFile(ctx.GlobalString(utils.DataDirFlag.Name)+"/bintrie", nil)
+	it, _ = snapTree.AccountIterator(root, common.Hash{})
+	found := 0
+	total := 0
+	for it.Next() {
+		total++
+		if trie.CheckKey(db, it.Hash().Bytes(), generatedRoot[:], 0, it.Account()) {
+			found++
+		}
+	}
+	log.Info("Read check finished", "total", total, "found", found)
+	db.Close()
 	return nil
 }
 
