@@ -22,7 +22,7 @@ The API-method `account_signGnosisSafeTx` was added. This method takes two param
   "params": ["0xfd1c4226bfD1c436672092F4eCbfC270145b7256",
     {
       "safe": "0x25a6c4BBd32B2424A9c99aEB0584Ad12045382B3",
-      "to": "0xB372a646f7F05Cc1785018dBDA7EBc734a2A20E2",
+      "to": "0x3E62E50C4FAFCb5589e1682683ce38e8645541e8",
       "value": "20000000000000000",
       "data": null,
       "operation": 0,
@@ -49,7 +49,7 @@ The API-method `account_signGnosisSafeTx` was added. This method takes two param
       "confirmationsRequired": null,
       "confirmations": [
         {
-          "owner": "0xAd2e180019FCa9e55CADe76E4487F126Fd08DA34",
+          "owner": "0x3E62E50C4FAFCb5589e1682683ce38e8645541e8",
           "submissionDate": "2020-09-15T21:54:49.663299Z",
           "transactionHash": null,
           "confirmationType": "CONFIRMATION",
