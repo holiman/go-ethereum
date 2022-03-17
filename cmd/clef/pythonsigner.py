@@ -121,7 +121,6 @@ class StdIOHandler:
         """  # noqa: E501
         contentType = req.get("content_type")
         address = req.get("address")
-        rawData = req.get("raw_data")
         hash_ = req.get("hash")
         meta = req.get("meta", {})
         sys.stdout.write(
