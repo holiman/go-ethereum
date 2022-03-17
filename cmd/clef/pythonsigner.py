@@ -1,21 +1,24 @@
-import os, sys, subprocess
+import sys
+import subprocess
+
 from tinyrpc.transports import ServerTransport
 from tinyrpc.protocols.jsonrpc import JSONRPCProtocol
 from tinyrpc.dispatch import public, RPCDispatcher
 from tinyrpc.server import RPCServer
 
 """
-This is a POC example of how to write a custom UI for Clef. The UI starts the
-clef process with the '--stdio-ui' option, and communicates with clef using standard input / output.
+This is a POC example of how to write a custom UI for Clef.
+The UI starts the clef process with the '--stdio-ui' option
+and communicates with clef using standard input / output.
 
-The standard input/output is a relatively secure way to communicate, as it does not require opening any ports
-or IPC files. Needless to say, it does not protect against memory inspection mechanisms where an attacker
-can access process memory.
+The standard input/output is a relatively secure way to communicate,
+as it does not require opening any ports or IPC files. Needless to say,
+it does not protect against memory inspection mechanisms
+where an attacker can access process memory.
 
 To make this work install all the requirements:
 
   pip install -r requirements.txt
-
 """
 
 try:
@@ -62,10 +65,10 @@ def metaString(meta):
     """
     return """
     Request context:
-	    {} -> {} -> {}
+        {} -> {} -> {}
     Additional HTTP header data, provided by the external caller:
-	    User-Agent: {}
-	    Origin: {}
+        User-Agent: {}
+        Origin: {}
 """.format(
         meta.get("remote", "<missing>"),
         meta.get("scheme", "<missing>"),
@@ -92,18 +95,18 @@ class StdIOHandler:
         :return:
         """
         transaction = req.get("transaction")
-        _from = transaction.get("from", "<missing>")
+        from_ = transaction.get("from", "<missing>")
         to = transaction.get("to", "<missing>")
         sys.stdout.write(
             """Sign transaction request:
     {}
-    
+
     From: {}
     To: {}
-    
+
     Auto-rejecting request
 """.format(
-                metaString(req.get("meta", {})), _from, to
+                metaString(req.get("meta", {})), from_, to
             )
         )
 
@@ -118,20 +121,19 @@ class StdIOHandler:
         contentType = req.get("content_type")
         address = req.get("address")
         rawData = req.get("raw_data")
-        contentType = req.get("content_type")
-        hash = req.get("hash")
+        hash_ = req.get("hash")
         meta = req.get("meta", {})
         sys.stdout.write(
             """Sign data request:
     {}
-    
+
     Content-type: {}
     Address: {}
     Hash: {}
 
     Auto-rejecting request
 """.format(
-                metaString(meta), contentType, address, hash
+                metaString(meta), contentType, address, hash_
             )
         )
 
@@ -146,7 +148,7 @@ class StdIOHandler:
         sys.stdout.write(
             """Create new account request:
     {}
-    
+
     Auto-rejecting request
 """.format(
                 metaString(meta)
