@@ -62,7 +62,7 @@ def sanitize(txt, limit=100):
 def metaString(meta):
     """
     "meta":{"remote":"clef binary","local":"main","scheme":"in-proc","User-Agent":"","Origin":""}
-    """
+    """  # noqa: E501
     return """
     Request context:
         {} -> {} -> {}
@@ -93,7 +93,7 @@ class StdIOHandler:
         :param call_info: info abou the call, e.g. if ABI info could not be
         :param meta: metadata about the request, e.g. where the call comes from
         :return:
-        """
+        """  # noqa: E501
         transaction = req.get("transaction")
         from_ = transaction.get("from", "<missing>")
         to = transaction.get("to", "<missing>")
@@ -114,10 +114,11 @@ class StdIOHandler:
 
     @public
     def approveSignData(self, req):
-        """Example request
+        """
+        Example request:
 
         {"jsonrpc":"2.0","id":8,"method":"ui_approveSignData","params":[{"content_type":"application/x-clique-header","address":"0x0011223344556677889900112233445566778899","raw_data":"+QIRoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlAAAAAAAAAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAuQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIIFOYIFOYIFOoIFOoIFOppFeHRyYSBkYXRhIEV4dHJhIGRhdGEgRXh0cqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIgAAAAAAAAAAA==","messages":[{"name":"Clique header","value":"clique header 1337 [0x44381ab449d77774874aca34634cb53bc21bd22aef2d3d4cf40e51176cb585ec]","type":"clique"}],"call_info":null,"hash":"0xa47ab61438a12a06c81420e308c2b7aae44e9cd837a5df70dd021421c0f58643","meta":{"remote":"clef binary","local":"main","scheme":"in-proc","User-Agent":"","Origin":""}}]}
-        """
+        """  # noqa: E501
         contentType = req.get("content_type")
         address = req.get("address")
         rawData = req.get("raw_data")
@@ -141,9 +142,11 @@ class StdIOHandler:
 
     @public
     def approveNewAccount(self, req):
-        """Example request
-        {"jsonrpc":"2.0","id":25,"method":"ui_approveNewAccount","params":[{"meta":{"remote":"clef binary","local":"main","scheme":"in-proc","User-Agent":"","Origin":""}}]}
         """
+        Example request:
+
+        {"jsonrpc":"2.0","id":25,"method":"ui_approveNewAccount","params":[{"meta":{"remote":"clef binary","local":"main","scheme":"in-proc","User-Agent":"","Origin":""}}]}
+        """  # noqa: E501
         meta = req.get("meta", {})
         sys.stdout.write(
             """Create new account request:
@@ -159,12 +162,13 @@ class StdIOHandler:
     @public
     def showError(self, req):
         """
-        Example request
+        Example request:
+
         {"jsonrpc":"2.0","method":"ui_showError","params":[{"text":"If you see this message, enter 'yes' to the next question"}]}
 
         :param message: to display
         :return:nothing
-        """
+        """  # noqa: E501
         text = req.get("text")
         sys.stdout.write("Error: {}\n".format(text))
         sys.stdout.write("Press enter to continue\n")
@@ -174,12 +178,13 @@ class StdIOHandler:
     @public
     def showInfo(self, req):
         """
-        Example request
+        Example request:
+
         {"jsonrpc":"2.0","method":"ui_showInfo","params":[{"text":"If you see this message, enter 'yes' to next question"}]}
 
         :param message: to display
         :return:nothing
-        """
+        """  # noqa: E501
         text = req.get("text")
         sys.stdout.write("Info: {}\n".format(text))
         sys.stdout.write("Press enter to continue\n")
@@ -189,11 +194,10 @@ class StdIOHandler:
     @public
     def onSignerStartup(self, req):
         """
-        Example request
-         {"jsonrpc":"2.0",
-         "method":"ui_onSignerStartup",
-         "params":[{"info":{"extapi_http":"n/a","extapi_ipc":"/home/user/.clef/clef.ipc","extapi_version":"6.1.0","intapi_version":"7.0.1"}}]}
-        """
+        Example request:
+
+        {"jsonrpc":"2.0", "method":"ui_onSignerStartup", "params":[{"info":{"extapi_http":"n/a","extapi_ipc":"/home/user/.clef/clef.ipc","extapi_version":"6.1.0","intapi_version":"7.0.1"}}]}
+        """  # noqa: E501
         info = req.get("info")
         http = info.get("extapi_http")
         ipc = info.get("extapi_ipc")
@@ -213,15 +217,19 @@ class StdIOHandler:
     @public
     def approveListing(self, req):
         """
+        Example request:
+
         {"jsonrpc":"2.0","id":23,"method":"ui_approveListing","params":[{"accounts":[{"address":...
-        """
+        """  # noqa: E501
         accounts = req.get("accounts", [])
         addrs = [x.get("address") for x in accounts]
 
-        sys.stdout.write(
-            "\n## Account listing request\n\tDo you want to allow listing the following accounts?\n\t-{}\n\n->".format(
-                "\n\t-".join(addrs)
-            )
+        sys.stdout.write("""
+## Account listing request
+\tDo you want to allow listing the following accounts?
+\t-{}
+
+->""".format("\n\t-".join(addrs))
         )
         sys.stdout.write("Auto-answering No\n")
         return {}
@@ -229,12 +237,13 @@ class StdIOHandler:
     @public
     def onInputRequired(self, req):
         """
-        Example request
+        Example request:
+
         {"jsonrpc":"2.0","id":1,"method":"ui_onInputRequired","params":[{"title":"Master Password","prompt":"Please enter the password to decrypt the master seed","isPassword":true}]}
 
         :param message: to display
         :return:nothing
-        """
+        """  # noqa: E501
         title = req.get("title")
         isPassword = req.get("isPassword")
         prompt = req.get("prompt")
