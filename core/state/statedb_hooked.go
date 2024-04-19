@@ -259,7 +259,7 @@ func (s *hookedStateDB) Finalise(deleteEmptyObjects bool) {
 	if s.hooks.OnBalanceChange == nil {
 		return
 	}
-	for addr := range s.inner.journal.dirties {
+	for _, addr := range s.inner.journal.dirtyAccounts() {
 		obj := s.inner.stateObjects[addr]
 		if obj != nil && obj.selfDestructed {
 			// If ether was sent to account post-selfdestruct it is burnt.
