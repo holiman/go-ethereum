@@ -30,6 +30,7 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
@@ -49,6 +50,39 @@ type PrecompiledContract interface {
 
 // PrecompiledContracts contains the precompiled contracts supported at the given fork.
 type PrecompiledContracts map[common.Address]PrecompiledContract
+
+// MovePrecompiles updates the precompile-map as needed, according to the state overrides.
+func (precompiles PrecompiledContracts) ApplyOverrides(stateOverrides state.StateOverrides) error {
+	// Tracks destinations of precompiles that were moved.
+	dirtyAddrs := make(map[common.Address]struct{})
+	for addr, account := range stateOverrides {
+		// If a precompile was moved to this address already, it can't be overridden.
+		if _, ok := dirtyAddrs[addr]; ok {
+			return fmt.Errorf("account %s has already been overridden by a precompile", addr.Hex())
+		}
+		p, isPrecompile := precompiles[addr]
+		// The MoveTo feature makes it possible to move a precompile
+		// code to another address. If the target address is another precompile
+		// the code for the latter is lost for this session.
+		// Note the destination account is not cleared upon move.
+		if account.MovePrecompileTo != nil {
+			if !isPrecompile {
+				return fmt.Errorf("account %s is not a precompile", addr.Hex())
+			}
+			// Refuse to move a precompile to an address that has been
+			// or will be overridden.
+			if _, present := stateOverrides[*account.MovePrecompileTo]; present {
+				return fmt.Errorf("account %s is already overridden", account.MovePrecompileTo.Hex())
+			}
+			precompiles[*account.MovePrecompileTo] = p
+			dirtyAddrs[*account.MovePrecompileTo] = struct{}{}
+		}
+		if isPrecompile {
+			delete(precompiles, addr)
+		}
+	}
+	return nil
+}
 
 // PrecompiledContractsHomestead contains the default set of pre-compiled Ethereum
 // contracts used in the Frontier and Homestead releases.

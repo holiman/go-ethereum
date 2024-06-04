@@ -43,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"maps"
 )
 
 const (
@@ -163,7 +164,7 @@ type TraceConfig struct {
 // field to override the state for tracing.
 type TraceCallConfig struct {
 	TraceConfig
-	StateOverrides *ethapi.StateOverride
+	StateOverrides map[common.Address]state.OverrideAccount
 	BlockOverrides *ethapi.BlockOverrides
 	TxIndex        *hexutil.Uint
 }
@@ -955,17 +956,23 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	}
 	defer release()
 
-	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 	// Apply the customization rules if required.
+	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 	if config != nil {
 		config.BlockOverrides.Apply(&vmctx)
-		rules := api.backend.ChainConfig().Rules(vmctx.BlockNumber, vmctx.Random != nil, vmctx.Time)
 
-		precompiles := vm.ActivePrecompiledContracts(rules)
-		if err := config.StateOverrides.Apply(statedb, precompiles); err != nil {
-			return nil, err
+		if len(config.StateOverrides) != 0 {
+			rules := api.backend.ChainConfig().Rules(vmctx.BlockNumber, vmctx.Random != nil, vmctx.Time)
+			precompiles := vm.ActivePrecompiledContracts(rules)
+			precompiles = maps.Clone(precompiles)
+			precompiles.ApplyOverrides(config.StateOverrides)
+			if statedb, err = state.OverrideState(statedb, config.StateOverrides); err != nil {
+				return nil, err
+			}
 		}
+
 	}
+
 	// Execute the trace
 	if err := args.CallDefaults(api.backend.RPCGasCap(), vmctx.BaseFee, api.backend.ChainConfig().ChainID); err != nil {
 		return nil, err

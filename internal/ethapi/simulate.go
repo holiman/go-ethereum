@@ -51,7 +51,7 @@ const (
 // simBlock is a batch of calls to be simulated sequentially.
 type simBlock struct {
 	BlockOverrides *BlockOverrides
-	StateOverrides *StateOverride
+	StateOverrides *state.StateOverrides
 	Calls          []TransactionArgs
 }
 
@@ -170,9 +170,16 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		blockContext.BlobBaseFee = block.BlockOverrides.BlobBaseFee.ToInt()
 	}
 	precompiles := sim.activePrecompiles(sim.base)
+	stateOverrides := block.StateOverrides
 	// State overrides are applied prior to execution of a block
-	if err := block.StateOverrides.Apply(sim.state, precompiles); err != nil {
-		return nil, nil, err
+	if stateOverrides != nil && len(*stateOverrides) != 0 {
+		precompiles = maps.Clone(precompiles)
+		precompiles.ApplyOverrides(*stateOverrides)
+		if oState, err := state.OverrideState(sim.state, *stateOverrides); err != nil {
+			return nil, nil, err
+		} else {
+			sim.state = oState
+		}
 	}
 	var (
 		gasUsed, blobGasUsed uint64

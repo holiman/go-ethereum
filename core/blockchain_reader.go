@@ -356,6 +356,14 @@ func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
 	return state.New(root, bc.statedb)
 }
 
+// StateWithOverrides returns a new mutable state with provided state overrides.
+func (bc *BlockChain) StateWithOverrides(root common.Hash, overrides *state.StateOverrides) (*state.StateDB, error) {
+	if overrides == nil {
+		return bc.StateAt(root)
+	}
+	return state.New(root, state.NewOverrideDatabase(bc.statedb, *overrides))
+}
+
 // Config retrieves the chain's fork configuration.
 func (bc *BlockChain) Config() *params.ChainConfig { return bc.chainConfig }
 
