@@ -130,4 +130,6 @@ func BenchmarkJumpdestOpEOFAnalysis(bench *testing.B) {
 	bench.Run(op.String(), bencher)
 	op = RJUMPV
 	bench.Run(op.String(), bencher)
+	op = EOFCREATE
+	bench.Run(op.String(), bencher)
 }
