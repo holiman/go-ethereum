@@ -166,11 +166,20 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	if err != nil {
 		utils.Fatalf("Failed to create the protocol stack: %v", err)
 	}
-	// Node doesn't by default populate account manager backends
-	if err := setAccountManagerBackends(stack.Config(), stack.AccountManager(), stack.KeyStoreDir()); err != nil {
-		utils.Fatalf("Failed to set account manager backends: %v", err)
+	if ctx.Bool(utils.DeveloperFlag.Name) {
+		ks := keystore.NewOpenKeystore()
+		developer, err := ks.NewAccount()
+		if err != nil {
+			utils.Fatalf("Failed to create developer account: %v", err)
+		}
+		stack.AccountManager().AddBackend(keystore.NewEphemBackend(ks))
+		log.Info("Using developer account", "address", developer.Address)
+		if !ctx.IsSet(utils.MinerPendingFeeRecipientFlag.Name) {
+			//Make sure the address is configured as fee recipient, otherwise
+			// the miner will fail to start.
+			ctx.Set(utils.MinerPendingFeeRecipientFlag.Name, developer.Address.Hex())
+		}
 	}
-
 	utils.SetEthConfig(ctx, stack, &cfg.Eth)
 	if ctx.IsSet(utils.EthStatsURLFlag.Name) {
 		cfg.Ethstats.URL = ctx.String(utils.EthStatsURLFlag.Name)
@@ -183,6 +192,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 // makeFullNode loads geth configuration and creates the Ethereum backend.
 func makeFullNode(ctx *cli.Context) *node.Node {
 	stack, cfg := makeConfigNode(ctx)
+
 	if ctx.IsSet(utils.OverrideCancun.Name) {
 		v := ctx.Uint64(utils.OverrideCancun.Name)
 		cfg.Eth.OverrideCancun = &v

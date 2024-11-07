@@ -35,8 +35,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
 	bparams "github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
@@ -1744,53 +1742,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.NetworkId = 1337
 		}
 		cfg.SyncMode = downloader.FullSync
-		// Create new developer account or reuse existing one
-		var (
-			developer  accounts.Account
-			passphrase string
-			err        error
-		)
-		if path := ctx.Path(PasswordFileFlag.Name); path != "" {
-			if text, err := os.ReadFile(path); err != nil {
-				Fatalf("Failed to read password file: %v", err)
-			} else {
-				if lines := strings.Split(string(text), "\n"); len(lines) > 0 {
-					passphrase = strings.TrimRight(lines[0], "\r") // Sanitise DOS line endings.
-				}
-			}
-		}
-		// Unlock the developer account by local keystore.
-		var ks *keystore.KeyStore
-		if keystores := stack.AccountManager().Backends(keystore.KeyStoreType); len(keystores) > 0 {
-			ks = keystores[0].(*keystore.KeyStore)
-		}
-		if ks == nil {
-			Fatalf("Keystore is not available")
-		}
-
-		// Figure out the dev account address.
-		// setEtherbase has been called above, configuring the miner address from command line flags.
-		if cfg.Miner.PendingFeeRecipient != (common.Address{}) {
-			developer = accounts.Account{Address: cfg.Miner.PendingFeeRecipient}
-		} else if accs := ks.Accounts(); len(accs) > 0 {
-			developer = ks.Accounts()[0]
-		} else {
-			developer, err = ks.NewAccount(passphrase)
-			if err != nil {
-				Fatalf("Failed to create developer account: %v", err)
-			}
-		}
-		// Make sure the address is configured as fee recipient, otherwise
-		// the miner will fail to start.
-		cfg.Miner.PendingFeeRecipient = developer.Address
-
-		if err := ks.Unlock(developer, passphrase); err != nil {
-			Fatalf("Failed to unlock developer account: %v", err)
-		}
-		log.Info("Using developer account", "address", developer.Address)
 
 		// Create a new developer genesis block or reuse existing one
-		cfg.Genesis = core.DeveloperGenesisBlock(ctx.Uint64(DeveloperGasLimitFlag.Name), &developer.Address)
+		devAddress := cfg.Miner.PendingFeeRecipient
+		log.Info("Using developer account in flags", "address", devAddress)
+		cfg.Genesis = core.DeveloperGenesisBlock(ctx.Uint64(DeveloperGasLimitFlag.Name), &devAddress)
 		if ctx.IsSet(DataDirFlag.Name) {
 			chaindb := tryMakeReadOnlyDatabase(ctx, stack)
 			if rawdb.ReadCanonicalHash(chaindb, 0) != (common.Hash{}) {

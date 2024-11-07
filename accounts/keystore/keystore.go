@@ -60,10 +60,9 @@ const walletRefreshCycle = 3 * time.Second
 
 // KeyStore manages a key storage directory on disk.
 type KeyStore struct {
-	storage  keyStore                     // Storage backend, might be cleartext or encrypted
-	cache    *accountCache                // In-memory account cache over the filesystem storage
-	changes  chan struct{}                // Channel receiving change notifications from the cache
-	unlocked map[common.Address]*unlocked // Currently unlocked account (decrypted private keys)
+	storage keyStore      // Storage backend, might be cleartext or encrypted
+	cache   *accountCache // In-memory account cache over the filesystem storage
+	changes chan struct{} // Channel receiving change notifications from the cache
 
 	wallets     []accounts.Wallet       // Wallet wrappers around the individual key files
 	updateFeed  event.Feed              // Event feed to notify wallet additions/removals
@@ -74,9 +73,9 @@ type KeyStore struct {
 	importMu sync.Mutex // Import Mutex locks the import to prevent two insertions from racing
 }
 
-type unlocked struct {
-	*Key
-	abort chan struct{}
+// NewEphemeralKeyStore creates an in-memory keystore.
+func NewEphemeralKeyStore() *KeyStore {
+	return nil
 }
 
 // NewKeyStore creates a keystore for the given directory.
@@ -92,8 +91,7 @@ func (ks *KeyStore) init(keydir string) {
 	ks.mu.Lock()
 	defer ks.mu.Unlock()
 
-	// Initialize the set of unlocked keys and the account cache
-	ks.unlocked = make(map[common.Address]*unlocked)
+	// Initialize the account cache
 	ks.cache, ks.changes = newAccountCache(keydir)
 
 	// TODO: In order for this finalizer to work, there must be no references
@@ -252,31 +250,12 @@ func (ks *KeyStore) Delete(a accounts.Account, passphrase string) error {
 // SignHash calculates a ECDSA signature for the given hash. The produced
 // signature is in the [R || S || V] format where V is 0 or 1.
 func (ks *KeyStore) SignHash(a accounts.Account, hash []byte) ([]byte, error) {
-	// Look up the key to sign with and abort if it cannot be found
-	ks.mu.RLock()
-	defer ks.mu.RUnlock()
-
-	unlockedKey, found := ks.unlocked[a.Address]
-	if !found {
-		return nil, ErrLocked
-	}
-	// Sign the hash using plain ECDSA operations
-	return crypto.Sign(hash, unlockedKey.PrivateKey)
+	return nil, ErrLocked
 }
 
 // SignTx signs the given transaction with the requested account.
 func (ks *KeyStore) SignTx(a accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
-	// Look up the key to sign with and abort if it cannot be found
-	ks.mu.RLock()
-	defer ks.mu.RUnlock()
-
-	unlockedKey, found := ks.unlocked[a.Address]
-	if !found {
-		return nil, ErrLocked
-	}
-	// Depending on the presence of the chain ID, sign with 2718 or homestead
-	signer := types.LatestSignerForChainID(chainID)
-	return types.SignTx(tx, signer, unlockedKey.PrivateKey)
+	return nil, ErrLocked
 }
 
 // SignHashWithPassphrase signs hash if the private key matching the given address
@@ -304,58 +283,6 @@ func (ks *KeyStore) SignTxWithPassphrase(a accounts.Account, passphrase string, 
 	return types.SignTx(tx, signer, key.PrivateKey)
 }
 
-// Unlock unlocks the given account indefinitely.
-func (ks *KeyStore) Unlock(a accounts.Account, passphrase string) error {
-	return ks.TimedUnlock(a, passphrase, 0)
-}
-
-// Lock removes the private key with the given address from memory.
-func (ks *KeyStore) Lock(addr common.Address) error {
-	ks.mu.Lock()
-	unl, found := ks.unlocked[addr]
-	ks.mu.Unlock()
-	if found {
-		ks.expire(addr, unl, time.Duration(0)*time.Nanosecond)
-	}
-	return nil
-}
-
-// TimedUnlock unlocks the given account with the passphrase. The account
-// stays unlocked for the duration of timeout. A timeout of 0 unlocks the account
-// until the program exits. The account must match a unique key file.
-//
-// If the account address is already unlocked for a duration, TimedUnlock extends or
-// shortens the active unlock timeout. If the address was previously unlocked
-// indefinitely the timeout is not altered.
-func (ks *KeyStore) TimedUnlock(a accounts.Account, passphrase string, timeout time.Duration) error {
-	a, key, err := ks.getDecryptedKey(a, passphrase)
-	if err != nil {
-		return err
-	}
-
-	ks.mu.Lock()
-	defer ks.mu.Unlock()
-	u, found := ks.unlocked[a.Address]
-	if found {
-		if u.abort == nil {
-			// The address was unlocked indefinitely, so unlocking
-			// it with a timeout would be confusing.
-			zeroKey(key.PrivateKey)
-			return nil
-		}
-		// Terminate the expire goroutine and replace it below.
-		close(u.abort)
-	}
-	if timeout > 0 {
-		u = &unlocked{Key: key, abort: make(chan struct{})}
-		go ks.expire(a.Address, u, timeout)
-	} else {
-		u = &unlocked{Key: key}
-	}
-	ks.unlocked[a.Address] = u
-	return nil
-}
-
 // Find resolves the given account into a unique entry in the keystore.
 func (ks *KeyStore) Find(a accounts.Account) (accounts.Account, error) {
 	ks.cache.maybeReload()
@@ -372,26 +299,6 @@ func (ks *KeyStore) getDecryptedKey(a accounts.Account, auth string) (accounts.A
 	}
 	key, err := ks.storage.GetKey(a.Address, a.URL.Path, auth)
 	return a, key, err
-}
-
-func (ks *KeyStore) expire(addr common.Address, u *unlocked, timeout time.Duration) {
-	t := time.NewTimer(timeout)
-	defer t.Stop()
-	select {
-	case <-u.abort:
-		// just quit
-	case <-t.C:
-		ks.mu.Lock()
-		// only drop if it's still the same key instance that dropLater
-		// was launched with. we can check that using pointer equality
-		// because the map stores a new pointer every time the key is
-		// unlocked.
-		if ks.unlocked[addr] == u {
-			zeroKey(u.PrivateKey)
-			delete(ks.unlocked, addr)
-		}
-		ks.mu.Unlock()
-	}
 }
 
 // NewAccount generates a new key and stores it into the key directory,
