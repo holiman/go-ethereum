@@ -79,10 +79,7 @@ func TestSign(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := ks.Unlock(a1, ""); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := ks.SignHash(accounts.Account{Address: a1.Address}, testSigData); err != nil {
+	if _, err := ks.SignHashWithPassphrase(accounts.Account{Address: a1.Address}, "", testSigData); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -97,124 +94,14 @@ func TestSignWithPassphrase(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, unlocked := ks.unlocked[acc.Address]; unlocked {
-		t.Fatal("expected account to be locked")
-	}
-
 	_, err = ks.SignHashWithPassphrase(acc, pass, testSigData)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if _, unlocked := ks.unlocked[acc.Address]; unlocked {
-		t.Fatal("expected account to be locked")
-	}
-
 	if _, err = ks.SignHashWithPassphrase(acc, "invalid passwd", testSigData); err == nil {
 		t.Fatal("expected SignHashWithPassphrase to fail with invalid password")
 	}
-}
-
-func TestTimedUnlock(t *testing.T) {
-	t.Parallel()
-	_, ks := tmpKeyStore(t)
-
-	pass := "foo"
-	a1, err := ks.NewAccount(pass)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Signing without passphrase fails because account is locked
-	_, err = ks.SignHash(accounts.Account{Address: a1.Address}, testSigData)
-	if err != ErrLocked {
-		t.Fatal("Signing should've failed with ErrLocked before unlocking, got ", err)
-	}
-
-	// Signing with passphrase works
-	if err = ks.TimedUnlock(a1, pass, 100*time.Millisecond); err != nil {
-		t.Fatal(err)
-	}
-
-	// Signing without passphrase works because account is temp unlocked
-	_, err = ks.SignHash(accounts.Account{Address: a1.Address}, testSigData)
-	if err != nil {
-		t.Fatal("Signing shouldn't return an error after unlocking, got ", err)
-	}
-
-	// Signing fails again after automatic locking
-	time.Sleep(250 * time.Millisecond)
-	_, err = ks.SignHash(accounts.Account{Address: a1.Address}, testSigData)
-	if err != ErrLocked {
-		t.Fatal("Signing should've failed with ErrLocked timeout expired, got ", err)
-	}
-}
-
-func TestOverrideUnlock(t *testing.T) {
-	t.Parallel()
-	_, ks := tmpKeyStore(t)
-
-	pass := "foo"
-	a1, err := ks.NewAccount(pass)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Unlock indefinitely.
-	if err = ks.TimedUnlock(a1, pass, 5*time.Minute); err != nil {
-		t.Fatal(err)
-	}
-
-	// Signing without passphrase works because account is temp unlocked
-	_, err = ks.SignHash(accounts.Account{Address: a1.Address}, testSigData)
-	if err != nil {
-		t.Fatal("Signing shouldn't return an error after unlocking, got ", err)
-	}
-
-	// reset unlock to a shorter period, invalidates the previous unlock
-	if err = ks.TimedUnlock(a1, pass, 100*time.Millisecond); err != nil {
-		t.Fatal(err)
-	}
-
-	// Signing without passphrase still works because account is temp unlocked
-	_, err = ks.SignHash(accounts.Account{Address: a1.Address}, testSigData)
-	if err != nil {
-		t.Fatal("Signing shouldn't return an error after unlocking, got ", err)
-	}
-
-	// Signing fails again after automatic locking
-	time.Sleep(250 * time.Millisecond)
-	_, err = ks.SignHash(accounts.Account{Address: a1.Address}, testSigData)
-	if err != ErrLocked {
-		t.Fatal("Signing should've failed with ErrLocked timeout expired, got ", err)
-	}
-}
-
-// This test should fail under -race if signing races the expiration goroutine.
-func TestSignRace(t *testing.T) {
-	t.Parallel()
-	_, ks := tmpKeyStore(t)
-
-	// Create a test account.
-	a1, err := ks.NewAccount("")
-	if err != nil {
-		t.Fatal("could not create the test account", err)
-	}
-
-	if err := ks.TimedUnlock(a1, "", 15*time.Millisecond); err != nil {
-		t.Fatal("could not unlock the test account", err)
-	}
-	end := time.Now().Add(500 * time.Millisecond)
-	for time.Now().Before(end) {
-		if _, err := ks.SignHash(accounts.Account{Address: a1.Address}, testSigData); err == ErrLocked {
-			return
-		} else if err != nil {
-			t.Errorf("Sign error: %v", err)
-			return
-		}
-		time.Sleep(1 * time.Millisecond)
-	}
-	t.Errorf("Account did not lock within the timeout")
 }
 
 // waitForKsUpdating waits until the updating-status of the ks reaches the

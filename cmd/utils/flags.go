@@ -1778,19 +1778,21 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			developer = accounts.Account{Address: cfg.Miner.PendingFeeRecipient}
 		} else if accs := ks.Accounts(); len(accs) > 0 {
 			developer = ks.Accounts()[0]
+			// TODO: attempt to open the account, then replace the existing
+			// backend with an OpenBackend containing the private key.
 		} else {
-			developer, err = ks.NewAccount(passphrase)
+			k2 := keystore.NewOpenKeystore()
+			developer, err = k2.NewAccount(passphrase)
 			if err != nil {
 				Fatalf("Failed to create developer account: %v", err)
 			}
+			log.Info("Adding ephmeral keystore backend")
+			stack.AccountManager().AddBackend(keystore.NewEphemBackend(k2))
 		}
 		// Make sure the address is configured as fee recipient, otherwise
 		// the miner will fail to start.
 		cfg.Miner.PendingFeeRecipient = developer.Address
 
-		if err := ks.Unlock(developer, passphrase); err != nil {
-			Fatalf("Failed to unlock developer account: %v", err)
-		}
 		log.Info("Using developer account", "address", developer.Address)
 
 		// Create a new developer genesis block or reuse existing one
