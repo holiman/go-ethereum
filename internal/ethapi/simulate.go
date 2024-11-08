@@ -51,7 +51,7 @@ const (
 // simBlock is a batch of calls to be simulated sequentially.
 type simBlock struct {
 	BlockOverrides *BlockOverrides
-	StateOverrides *StateOverride
+	StateOverrides *state.StateOverride
 	Calls          []TransactionArgs
 }
 

@@ -156,14 +156,14 @@ type TraceConfig struct {
 	Reexec  *uint64
 	// Config specific to given tracer. Note struct logger
 	// config are historically embedded in main object.
-	TracerConfig json.RawMessage
+	TracerConfig   json.RawMessage
+	StateOverrides state.StateOverride
 }
 
 // TraceCallConfig is the config for traceCall API. It holds one more
 // field to override the state for tracing.
 type TraceCallConfig struct {
 	TraceConfig
-	StateOverrides *ethapi.StateOverride
 	BlockOverrides *ethapi.BlockOverrides
 	TxIndex        *hexutil.Uint
 }
@@ -1016,8 +1016,13 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 			return nil, err
 		}
 	}
+	vmConfig := vm.Config{
+		Tracer:         tracer.Hooks,
+		NoBaseFee:      true,
+		StateOverrides: config.StateOverrides,
+	}
 	// The actual TxContext will be created as part of ApplyTransactionWithEVM.
-	vmenv := vm.NewEVM(vmctx, vm.TxContext{GasPrice: message.GasPrice, BlobFeeCap: message.BlobGasFeeCap}, statedb, api.backend.ChainConfig(), vm.Config{Tracer: tracer.Hooks, NoBaseFee: true})
+	vmenv := vm.NewEVM(vmctx, vm.TxContext{GasPrice: message.GasPrice, BlobFeeCap: message.BlobGasFeeCap}, statedb, api.backend.ChainConfig(), vmConfig)
 
 	// Define a meaningful timeout of a single transaction trace
 	if config.Timeout != nil {
