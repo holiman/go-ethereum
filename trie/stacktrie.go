@@ -25,9 +25,43 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
+type meteredPool struct {
+	name string
+	pool sync.Pool
+	//balance int
+}
+
+func (m *meteredPool) Get() any {
+	//m.balance += 1
+	//fmt.Printf("pool %v get, balance %d\n", m.name, m.balance)
+	return m.pool.Get()
+}
+
+func (m *meteredPool) Put(x []byte) {
+	if cap(x) < 16 {
+		return
+	}
+	if len(x) > 0 {
+		x = x[:0]
+	}
+	m.pool.Put(x)
+}
+
 var (
+	// The stPool is well balanced. Nothing seems to leak. Goes to ~40 items
+	//stPool = meteredPool{
+	//	name:    "nodePool",
+	//	pool:    sync.Pool{New: func() any { return new(stNode) }},
+	//	balance: 0,
+	//}
 	stPool = sync.Pool{New: func() any { return new(stNode) }}
-	_      = types.TrieHasher((*StackTrie)(nil))
+	// A pool for keybytes in hex. Goes to ~40 items
+	kPool = meteredPool{
+		name: "keyBytePool",
+		pool: sync.Pool{New: func() any { return make([]byte, 32) }},
+	}
+
+	_ = types.TrieHasher((*StackTrie)(nil))
 )
 
 // OnTrieNode is a callback method invoked when a trie node is committed
@@ -64,7 +98,12 @@ func (t *StackTrie) Update(key, value []byte) error {
 	if len(value) == 0 {
 		return errors.New("trying to insert empty (deletion)")
 	}
-	k := t.TrieKey(key)
+	k := kPool.Get().([]byte)
+	if len(k) < 2*len(key) {
+		// Need to grow it
+		k = append(k, make([]byte, 2*len(key)-len(k))...)
+	}
+	writeHexKey(k, key)
 	if bytes.Compare(t.last, k) >= 0 {
 		return errors.New("non-ascending key order")
 	}
@@ -73,7 +112,13 @@ func (t *StackTrie) Update(key, value []byte) error {
 	} else {
 		t.last = append(t.last[:0], k...) // reuse key slice
 	}
-	t.insert(t.root, k, value, nil)
+	v := kPool.Get().([]byte)
+	v = append(v, value...)
+
+	p := kPool.Get().([]byte)
+	t.insert(t.root, k, v, p)
+	kPool.Put(k[:0])
+	kPool.Put(p[:0])
 	return nil
 }
 
@@ -104,6 +149,7 @@ type stNode struct {
 func newLeaf(key, val []byte) *stNode {
 	st := stPool.Get().(*stNode)
 	st.typ = leafNode
+	st.key = kPool.Get().([]byte)
 	st.key = append(st.key, key...)
 	st.val = val
 	return st
@@ -129,10 +175,17 @@ const (
 )
 
 func (n *stNode) reset() *stNode {
-	n.key = n.key[:0]
+	kPool.Put(n.key)
+	n.key = nil
+	kPool.Put(n.val)
 	n.val = nil
 	for i := range n.children {
-		n.children[i] = nil
+		if child := n.children[i]; child != nil {
+			panic(1) // never happens
+			//n.children[i] = nil
+			//child.reset()
+			//stPool.Put(child)
+		}
 	}
 	n.typ = emptyNode
 	return n
@@ -161,7 +214,8 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 		for i := idx - 1; i >= 0; i-- {
 			if st.children[i] != nil {
 				if st.children[i].typ != hashedNode {
-					t.hash(st.children[i], append(path, byte(i)))
+					t.hash(st.children[i],
+						append(path, byte(i)))
 				}
 				break
 			}
@@ -171,7 +225,11 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 		if st.children[idx] == nil {
 			st.children[idx] = newLeaf(key[1:], value)
 		} else {
-			t.insert(st.children[idx], key[1:], value, append(path, key[0]))
+			t.insert(
+				st.children[idx],
+				key[1:],
+				value,
+				append(path, key[0]))
 		}
 
 	case extNode: /* Ext */
@@ -186,7 +244,10 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 		if diffidx == len(st.key) {
 			// Ext key and key segment are identical, recurse into
 			// the child node.
-			t.insert(st.children[0], key[diffidx:], value, append(path, key[:diffidx]...))
+			t.insert(st.children[0],
+				key[diffidx:],
+				value,
+				append(path, key[:diffidx]...))
 			return
 		}
 		// Save the original part. Depending if the break is
@@ -199,14 +260,16 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 			// extension. The path prefix of the newly-inserted
 			// extension should also contain the different byte.
 			n = newExt(st.key[diffidx+1:], st.children[0])
-			t.hash(n, append(path, st.key[:diffidx+1]...))
+			t.hash(n,
+				append(path, st.key[:diffidx+1]...))
 		} else {
 			// Break on the last byte, no need to insert
 			// an extension node: reuse the current node.
 			// The path prefix of the original part should
 			// still be same.
 			n = st.children[0]
-			t.hash(n, append(path, st.key...))
+			t.hash(n,
+				append(path, st.key...))
 		}
 		var p *stNode
 		if diffidx == 0 {
@@ -283,7 +346,11 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 
 	case emptyNode: /* Empty */
 		st.typ = leafNode
-		st.key = key
+		// need to copy the key here, we are not allowed to retain a
+		// reference to it
+		newKey := kPool.Get().([]byte)
+		newKey = append(newKey, key...)
+		st.key = newKey
 		st.val = value
 
 	case hashedNode:
@@ -313,30 +380,34 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 
 	case emptyNode:
 		st.val = types.EmptyRootHash.Bytes()
+		panic(1)
 		st.key = st.key[:0]
 		st.typ = hashedNode
 		return
 
 	case branchNode:
-		var nodes fullNode
+		var nodes fullnodeEncoder
 		for i, child := range st.children {
 			if child == nil {
-				nodes.Children[i] = nilValueNode
 				continue
 			}
-			t.hash(child, append(path, byte(i)))
-
+			t.hash(child,
+				append(path, byte(i)))
 			if len(child.val) < 32 {
 				nodes.Children[i] = rawNode(child.val)
 			} else {
 				nodes.Children[i] = hashNode(child.val)
 			}
-			st.children[i] = nil
-			stPool.Put(child.reset()) // Release child back to pool.
 		}
 		nodes.encode(t.h.encbuf)
 		blob = t.h.encodedBytes()
-
+		for i, child := range st.children {
+			if child == nil {
+				continue
+			}
+			st.children[i] = nil
+			stPool.Put(child.reset()) // release child
+		}
 	case extNode:
 		// recursively hash and commit child as the first step
 		t.hash(st.children[0], append(path, st.key...))
@@ -345,6 +416,7 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 		n := shortNode{Key: hexToCompactInPlace(st.key)}
 		if len(st.children[0].val) < 32 {
 			n.Val = rawNode(st.children[0].val)
+
 		} else {
 			n.Val = hashNode(st.children[0].val)
 		}
@@ -356,7 +428,10 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 
 	case leafNode:
 		st.key = append(st.key, byte(16))
-		n := shortNode{Key: hexToCompactInPlace(st.key), Val: valueNode(st.val)}
+		n := shortNodeEncoder{
+			Key: hexToCompactInPlace(st.key),
+			Val: valueNode(st.val),
+		}
 
 		n.encode(t.h.encbuf)
 		blob = t.h.encodedBytes()
@@ -368,16 +443,21 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 	st.typ = hashedNode
 	st.key = st.key[:0]
 
+	kPool.Put(st.val)
+	st.val = nil
+
 	// Skip committing the non-root node if the size is smaller than 32 bytes
 	// as tiny nodes are always embedded in their parent except root node.
 	if len(blob) < 32 && len(path) > 0 {
-		st.val = common.CopyBytes(blob)
+		h := kPool.Get().([]byte)
+		st.val = append(h, blob...)
 		return
 	}
 	// Write the hash to the 'val'. We allocate a new val here to not mutate
 	// input values.
-	st.val = t.h.hashData(blob)
-
+	h := kPool.Get().([]byte)
+	t.h.hashDataTo(blob, h)
+	st.val = h
 	// Invoke the callback it's provided. Notably, the path and blob slices are
 	// volatile, please deep-copy the slices in callback if the contents need
 	// to be retained.
