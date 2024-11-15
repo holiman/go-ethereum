@@ -73,11 +73,6 @@ type KeyStore struct {
 	importMu sync.Mutex // Import Mutex locks the import to prevent two insertions from racing
 }
 
-// NewEphemeralKeyStore creates an in-memory keystore.
-func NewEphemeralKeyStore() *KeyStore {
-	return nil
-}
-
 // NewKeyStore creates a keystore for the given directory.
 func NewKeyStore(keydir string, scryptN, scryptP int) *KeyStore {
 	keydir, _ = filepath.Abs(keydir)

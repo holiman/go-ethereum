@@ -27,7 +27,9 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/ethereum/go-ethereum/accounts/external"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/beacon/blsync"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -176,6 +178,35 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 			ctx.Set(utils.MinerPendingFeeRecipientFlag.Name, developer.Address.Hex())
 		}
 	}
+	if conf := stack.Config(); len(conf.ExternalSigner) > 0 {
+		log.Info("Using external signer", "url", conf.ExternalSigner)
+		if extBackend, err := external.NewExternalBackend(conf.ExternalSigner); err == nil {
+			stack.AccountManager().AddBackend(extBackend)
+		} else {
+			utils.Fatalf("error connecting to external signer: %v", err)
+		}
+	}
+	if conf := stack.Config(); conf.USB {
+		// Start a USB hub for Ledger hardware wallets
+		if ledgerhub, err := usbwallet.NewLedgerHub(); err != nil {
+			log.Warn(fmt.Sprintf("Failed to start Ledger hub, disabling: %v", err))
+		} else {
+			stack.AccountManager().AddBackend(ledgerhub)
+		}
+		// Start a USB hub for Trezor hardware wallets (HID version)
+		if trezorhub, err := usbwallet.NewTrezorHubWithHID(); err != nil {
+			log.Warn(fmt.Sprintf("Failed to start HID Trezor hub, disabling: %v", err))
+		} else {
+			stack.AccountManager().AddBackend(trezorhub)
+		}
+		// Start a USB hub for Trezor hardware wallets (WebUSB version)
+		if trezorhub, err := usbwallet.NewTrezorHubWithWebUSB(); err != nil {
+			log.Warn(fmt.Sprintf("Failed to start WebUSB Trezor hub, disabling: %v", err))
+		} else {
+			stack.AccountManager().AddBackend(trezorhub)
+		}
+	}
+
 	utils.SetEthConfig(ctx, stack, &cfg.Eth)
 	if ctx.IsSet(utils.EthStatsURLFlag.Name) {
 		cfg.Ethstats.URL = ctx.String(utils.EthStatsURLFlag.Name)

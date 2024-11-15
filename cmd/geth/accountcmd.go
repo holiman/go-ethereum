@@ -196,14 +196,7 @@ nodes.
 )
 
 func setAccountManagerBackends(conf *node.Config, am *accounts.Manager, keydir string) error {
-	scryptN := keystore.StandardScryptN
-	scryptP := keystore.StandardScryptP
-	if conf.UseLightweightKDF {
-		scryptN = keystore.LightScryptN
-		scryptP = keystore.LightScryptP
-	}
-
-	// Assemble the supported backends
+	// We're using EITHER external signer OR local signers.
 	if len(conf.ExternalSigner) > 0 {
 		log.Info("Using external signer", "url", conf.ExternalSigner)
 		if extBackend, err := external.NewExternalBackend(conf.ExternalSigner); err == nil {
@@ -213,12 +206,15 @@ func setAccountManagerBackends(conf *node.Config, am *accounts.Manager, keydir s
 			return fmt.Errorf("error connecting to external signer: %v", err)
 		}
 	}
-
-	// For now, we're using EITHER external signer OR local signers.
-	// If/when we implement some form of lockfile for USB and keystore wallets,
-	// we can have both, but it's very confusing for the user to see the same
-	// accounts in both externally and locally, plus very racey.
-	am.AddBackend(keystore.NewKeyStore(keydir, scryptN, scryptP))
+	{ // The local keystore backend
+		scryptN := keystore.StandardScryptN
+		scryptP := keystore.StandardScryptP
+		if conf.UseLightweightKDF {
+			scryptN = keystore.LightScryptN
+			scryptP = keystore.LightScryptP
+		}
+		am.AddBackend(keystore.NewKeyStore(keydir, scryptN, scryptP))
+	}
 	if conf.USB {
 		// Start a USB hub for Ledger hardware wallets
 		if ledgerhub, err := usbwallet.NewLedgerHub(); err != nil {
