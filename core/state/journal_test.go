@@ -28,6 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/holiman/uint256"
 )
 
@@ -233,7 +234,7 @@ func fuzzJournals(t *testing.T, data []byte) {
 						return
 					}
 				}
-				if s.GetNonce(addr) == 0 && emptyStorage {
+				if emptyStorage {
 					s.CreateContract(addr)
 					// We also set some code here, to prevent the
 					// CreateContract action from being performed twice in a row,
@@ -344,6 +345,19 @@ func fuzzJournals(t *testing.T, data []byte) {
 		})
 		if !slices.Equal(accs1, accs2) {
 			t.Fatalf("mismatched dirty-sets:\n%v\n%v", accs1, accs2)
+		}
+
+		for _, addr := range accs1 {
+			if cHash := stateDbs[0].GetCodeHash(addr); cHash != types.EmptyCodeHash && cHash != (common.Hash{}) {
+				have := crypto.Keccak256Hash(stateDbs[0].GetCode(addr))
+				if have != cHash {
+					t.Fatalf("0: mismatched codehash <-> code.\ncodehash:   %x\nhash(code): %x\n", cHash, have)
+				}
+				have = crypto.Keccak256Hash(stateDbs[1].GetCode(addr))
+				if have != cHash {
+					t.Fatalf("1: mismatched codehash <-> code.\ncodehash:   %x\nhash(code): %x\n", cHash, have)
+				}
+			}
 		}
 	}
 	h1, err1 := stateDbs[0].Commit(0, false)

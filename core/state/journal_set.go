@@ -217,6 +217,7 @@ func (j *scopedJournal) revert(s *StateDB) {
 			}
 		} else {
 			if !bytes.Equal(obj.CodeHash(), journalHash) {
+				// TODO @holiman set the code back!
 				obj.setCode(common.BytesToHash(data.codeHash), nil)
 			}
 		}
