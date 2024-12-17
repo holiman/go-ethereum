@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/holiman/uint256"
 )
 
@@ -63,6 +64,9 @@ type scopedJournal struct {
 
 	storageChanges  map[common.Address]map[common.Hash]doubleHash
 	tStorageChanges map[common.Address]map[common.Hash]common.Hash
+
+	// code is a lookup-table for code.
+	code map[common.Hash][]byte
 }
 
 func newScopedJournal() *scopedJournal {
@@ -81,6 +85,7 @@ func (j *scopedJournal) deepCopy() *scopedJournal {
 		logs:                slices.Clone(j.logs),
 		accessListAddresses: slices.Clone(j.accessListAddresses),
 		accessListAddrSlots: slices.Clone(j.accessListAddrSlots),
+		code:                maps.Clone(j.code),
 	}
 	if j.storageChanges != nil {
 		cpy.storageChanges = make(map[common.Address]map[common.Hash]doubleHash)
@@ -95,6 +100,19 @@ func (j *scopedJournal) deepCopy() *scopedJournal {
 		}
 	}
 	return cpy
+}
+
+// stashCode remembers a piece of code for later. The code itself is not part of
+// the account (only the codeHash is).
+func (j *scopedJournal) stashCode(prev []byte) {
+	if j.code == nil {
+		j.code = make(map[common.Hash][]byte)
+	}
+	j.code[crypto.Keccak256Hash(prev)] = prev
+}
+
+func (j *scopedJournal) lookupCode(hash common.Hash) []byte {
+	return j.code[hash]
 }
 
 func (j *scopedJournal) journalRefundChange(prev uint64) {
@@ -217,8 +235,8 @@ func (j *scopedJournal) revert(s *StateDB) {
 			}
 		} else {
 			if !bytes.Equal(obj.CodeHash(), journalHash) {
-				// TODO @holiman set the code back!
-				obj.setCode(common.BytesToHash(data.codeHash), nil)
+				h := common.BytesToHash(journalHash)
+				obj.setCode(h, j.lookupCode(h))
 			}
 		}
 		obj.setBalance(&data.balance)
@@ -300,6 +318,14 @@ func (j *scopedJournal) merge(parent *scopedJournal) {
 					prevChanges[k] = v
 				}
 			}
+		}
+	}
+	// Copy the code lookup
+	if j.code != nil {
+		if parent.code == nil {
+			parent.code = j.code
+		} else {
+			maps.Copy(parent.code, j.code)
 		}
 	}
 }
@@ -400,8 +426,11 @@ func (j *sparseJournal) balanceChange(addr common.Address, account *types.StateA
 }
 
 func (j *sparseJournal) setCode(addr common.Address, account *types.StateAccount, prev []byte) {
-	// TODO @holiman: Actually store the prev, and later on set it back on revert.
 	j.journalAccountChange(addr, account, false, true)
+	if len(prev) > 0 {
+		// Keep the code in a lookup
+		j.entries[len(j.entries)-1].stashCode(prev)
+	}
 }
 
 func (j *sparseJournal) createObject(addr common.Address) {
