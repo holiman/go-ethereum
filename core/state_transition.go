@@ -531,6 +531,9 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		if effectiveTip.Cmp(msg.GasTipCap) > 0 {
 			effectiveTip = msg.GasTipCap
 		}
+		burn, _ := uint256.FromBig(st.evm.Context.BaseFee)                            // BOR-change
+		burn.Mul(burn, uint256.NewInt(st.gasUsed()))                                  // BOR-change
+		st.state.AddBalance(common.Address{}, burn, tracing.BalanceChangeUnspecified) // BOR-change
 	}
 	effectiveTipU256, _ := uint256.FromBig(effectiveTip)
 
