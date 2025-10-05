@@ -151,6 +151,27 @@ block is used.
 `,
 			},
 			{
+				Name:      "dumpbinary",
+				Usage:     "Dump a specific block from storage (same as 'geth dump' but using snapshots), dumping the **postimages** as a sequence of 32-byte blobs",
+				ArgsUsage: "[? <blockHash> | <blockNum>]",
+				Action:    dumpBinaryState,
+				Flags: slices.Concat(
+					[]cli.Flag{
+						&cli.BoolFlag{
+							Name:  "onlyEOA",
+							Usage: "Only include EOA address hashes",
+						},
+					},
+					utils.NetworkFlags, utils.DatabaseFlags),
+				Description: `
+This command is semantically equivalent to 'geth dump', but uses the snapshots
+as the backend data source, making this command a lot faster.
+
+The argument is interpreted as block number or hash. If none is provided, the latest
+block is used.
+`,
+			},
+			{
 				Action:    snapshotExportPreimages,
 				Name:      "export-preimages",
 				Usage:     "Export the preimage in snapshot enumeration order",
